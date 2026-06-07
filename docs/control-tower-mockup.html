@@ -1,0 +1,1705 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI Project Control Tower — 多项目治理平台</title>
+<style>
+/* ==========================================================================
+   RESET & BASE
+   ========================================================================== */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg-primary: #0a0e14;
+  --bg-secondary: #131820;
+  --bg-card: #181f2a;
+  --bg-hover: #1e2735;
+  --bg-overlay: rgba(10,14,20,0.7);
+  --border: #252d3a;
+  --text-primary: #e6edf3;
+  --text-secondary: #8b949e;
+  --text-muted: #5c6670;
+  --green: #3fb950;
+  --green-bg: rgba(63,185,80,0.12);
+  --yellow: #d29922;
+  --yellow-bg: rgba(210,153,34,0.12);
+  --red: #f85149;
+  --red-bg: rgba(248,81,73,0.12);
+  --blue: #58a6ff;
+  --blue-bg: rgba(88,166,255,0.12);
+  --purple: #bc8cff;
+  --purple-bg: rgba(188,140,255,0.12);
+  --font-mono: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+  --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --radius: 8px;
+  --radius-lg: 12px;
+}
+
+body {
+  font-family: var(--font-sans);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* ==========================================================================
+   TOP BAR
+   ========================================================================== */
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 20px;
+  height: 48px;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+  z-index: 100;
+}
+.topbar-left { display: flex; align-items: center; gap: 16px; }
+.topbar-right { display: flex; align-items: center; gap: 20px; }
+
+.logo { font-weight: 700; font-size: 15px; color: var(--text-primary); letter-spacing: -0.3px; }
+.logo span { color: var(--blue); }
+
+.global-stat {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 12px; color: var(--text-secondary);
+}
+.global-stat .dot { width: 8px; height: 8px; border-radius: 50%; }
+.global-stat .dot.green { background: var(--green); }
+.global-stat .dot.yellow { background: var(--yellow); }
+.global-stat .dot.red { background: var(--red); animation: pulse-dot 2s infinite; }
+@keyframes pulse-dot { 0%,100%{opacity:1} 50%{opacity:.4} }
+.global-stat strong { color: var(--text-primary); }
+
+.search-box {
+  background: var(--bg-primary); border: 1px solid var(--border);
+  border-radius: 6px; padding: 4px 10px; font-size: 12px;
+  color: var(--text-primary); width: 200px; outline: none;
+}
+.search-box::placeholder { color: var(--text-muted); }
+.search-box:focus { border-color: var(--blue); }
+
+/* ==========================================================================
+   LAYOUT
+   ========================================================================== */
+.app-body { display: flex; flex: 1; overflow: hidden; }
+
+/* Sidebar */
+.sidebar {
+  width: 272px; flex-shrink: 0;
+  background: var(--bg-secondary);
+  border-right: 1px solid var(--border);
+  display: flex; flex-direction: column;
+  overflow-y: auto;
+  z-index: 50;
+}
+
+.sidebar-section { padding: 14px 16px; }
+.sidebar-section + .sidebar-section { border-top: 1px solid var(--border); }
+.sidebar-label {
+  font-size: 10px; text-transform: uppercase; letter-spacing: 0.8px;
+  color: var(--text-muted); margin-bottom: 10px; font-weight: 600;
+  display: flex; align-items: center; justify-content: space-between;
+}
+
+/* --- Navigation --- */
+.nav-item {
+  display: flex; align-items: center; gap: 8px;
+  padding: 7px 10px; border-radius: 6px; font-size: 13px;
+  color: var(--text-secondary); cursor: pointer; transition: all 0.15s;
+  margin-bottom: 2px;
+}
+.nav-item:hover { background: var(--bg-hover); color: var(--text-primary); }
+.nav-item.active { background: var(--blue-bg); color: var(--blue); }
+
+/* --- Escalation Items (sidebar list) --- */
+.escalation-item {
+  padding: 10px 12px; border-radius: 8px; margin-bottom: 8px;
+  cursor: pointer; transition: all 0.2s;
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+  position: relative;
+}
+.escalation-item:hover {
+  border-color: var(--blue);
+  background: var(--bg-hover);
+  transform: translateX(2px);
+}
+.escalation-item.urgent {
+  border-left: 3px solid var(--red);
+}
+.escalation-item.urgent::after {
+  content: '⚠';
+  position: absolute; right: 10px; top: 10px;
+  font-size: 14px; color: var(--red);
+}
+.escalation-item .esc-project {
+  font-size: 10px; color: var(--blue); font-weight: 600;
+  margin-bottom: 4px;
+}
+.escalation-item .esc-title {
+  font-size: 13px; font-weight: 500; line-height: 1.3;
+  margin-bottom: 6px; padding-right: 20px;
+}
+.escalation-item .esc-meta {
+  font-size: 10px; color: var(--text-muted);
+  display: flex; align-items: center; gap: 6px;
+}
+.escalation-item .esc-cta {
+  font-size: 10px; color: var(--text-muted);
+  margin-top: 6px; opacity: 0;
+  transition: opacity 0.2s;
+}
+.escalation-item:hover .esc-cta { opacity: 1; color: var(--blue); }
+
+.escalation-item.resolved {
+  opacity: 0.45; pointer-events: none;
+}
+
+/* Badge */
+.badge {
+  background: var(--red); color: #fff;
+  font-size: 10px; padding: 1px 8px; border-radius: 10px; font-weight: 700;
+  line-height: 16px;
+}
+
+/* Main Content */
+.main { flex: 1; overflow-y: auto; padding: 24px; position: relative; }
+
+/* ==========================================================================
+   DECISION DRAWER (slides from right over main content)
+   ========================================================================== */
+.drawer-overlay {
+  position: fixed; inset: 0; background: var(--bg-overlay);
+  z-index: 200; opacity: 0; visibility: hidden;
+  transition: opacity 0.25s, visibility 0.25s;
+}
+.drawer-overlay.open { opacity: 1; visibility: visible; }
+
+.drawer {
+  position: fixed; top: 0; right: 0; bottom: 0; width: 520px;
+  background: var(--bg-secondary); border-left: 1px solid var(--border);
+  z-index: 201; transform: translateX(100%);
+  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  display: flex; flex-direction: column;
+  box-shadow: -8px 0 32px rgba(0,0,0,0.5);
+}
+.drawer.open { transform: translateX(0); }
+
+.drawer-header {
+  padding: 20px 24px; border-bottom: 1px solid var(--border);
+  display: flex; align-items: flex-start; justify-content: space-between;
+  flex-shrink: 0;
+}
+.drawer-header .urgency-tag {
+  font-size: 11px; font-weight: 600; padding: 2px 10px; border-radius: 4px;
+}
+.drawer-header .urgency-tag.urgent { background: var(--red-bg); color: var(--red); }
+.drawer-header .urgency-tag.normal { background: var(--yellow-bg); color: var(--yellow); }
+
+.drawer-title { font-size: 18px; font-weight: 600; margin-top: 8px; line-height: 1.3; }
+.drawer-subtitle { font-size: 12px; color: var(--text-muted); margin-top: 4px; }
+
+.btn-close {
+  background: transparent; border: 1px solid var(--border); color: var(--text-muted);
+  width: 32px; height: 32px; border-radius: 6px; font-size: 16px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: all 0.15s; flex-shrink: 0;
+}
+.btn-close:hover { background: var(--bg-hover); color: var(--text-primary); border-color: var(--red); }
+
+.drawer-body {
+  flex: 1; overflow-y: auto; padding: 24px;
+}
+
+.drawer-section { margin-bottom: 24px; }
+.drawer-section h4 {
+  font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px;
+  color: var(--text-muted); margin-bottom: 10px; font-weight: 600;
+}
+.drawer-section p { font-size: 13px; line-height: 1.6; color: var(--text-secondary); }
+
+/* --- Option cards inside drawer --- */
+.option-card {
+  background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 16px; margin-bottom: 10px;
+  transition: border-color 0.15s;
+}
+.option-card.recommended { border-color: rgba(63,185,80,0.3); background: rgba(63,185,80,0.04); }
+.option-card.recommended::before { content: '★ Agent 推荐'; font-size: 10px; color: var(--green); font-weight: 600; display: block; margin-bottom: 6px; }
+.option-card h5 { font-size: 14px; font-weight: 600; margin-bottom: 6px; }
+.option-card .pros-cons { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; }
+.option-card .pros, .option-card .cons { font-size: 11px; line-height: 1.6; }
+.option-card .pros { color: var(--green); }
+.option-card .cons { color: var(--yellow); }
+.option-card .pros::before { content: '+ '; }
+.option-card .cons::before { content: '− '; }
+
+/* --- Impact badge --- */
+.impact-row {
+  display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px;
+}
+.impact-tag {
+  font-size: 10px; padding: 3px 8px; border-radius: 4px;
+  background: var(--bg-card); border: 1px solid var(--border); color: var(--text-secondary);
+}
+.impact-tag.fail { border-color: var(--red); color: var(--red); }
+
+/* --- Agent reasoning --- */
+.reasoning-block {
+  background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 14px;
+  font-family: var(--font-mono); font-size: 11px;
+  line-height: 1.7; color: var(--text-secondary);
+  white-space: pre-wrap;
+}
+
+/* --- Decision actions --- */
+.drawer-footer {
+  padding: 16px 24px; border-top: 1px solid var(--border);
+  display: flex; gap: 10px; flex-shrink: 0; background: var(--bg-secondary);
+}
+.btn-decision {
+  flex: 1; padding: 10px 16px; border-radius: 8px; font-size: 13px;
+  font-weight: 600; cursor: pointer; transition: all 0.15s;
+  border: 1px solid var(--border); background: transparent; color: var(--text-primary);
+  text-align: center;
+}
+.btn-decision:hover { background: var(--bg-hover); }
+.btn-decision.primary { background: var(--blue); border-color: var(--blue); color: #fff; }
+.btn-decision.primary:hover { filter: brightness(1.15); }
+.btn-decision.success { background: var(--green); border-color: var(--green); color: #fff; }
+.btn-decision.success:hover { filter: brightness(1.15); }
+.btn-decision.ask {
+  flex: 0.5; font-size: 12px; color: var(--text-secondary);
+}
+.btn-decision.ask:hover { color: var(--yellow); border-color: var(--yellow); }
+
+/* ==========================================================================
+   FLEET VIEW
+   ========================================================================== */
+.fleet-header { margin-bottom: 20px; }
+.fleet-header h2 { font-size: 18px; font-weight: 600; margin-bottom: 4px; }
+.fleet-header p { font-size: 13px; color: var(--text-secondary); }
+
+.fleet-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  gap: 16px;
+}
+
+.project-card {
+  background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: var(--radius-lg); padding: 20px; cursor: pointer;
+  transition: all 0.2s; position: relative;
+}
+.project-card:hover { border-color: var(--blue); transform: translateY(-1px); }
+.project-card.critical { border-color: rgba(248,81,73,0.3); }
+
+.card-header {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 14px;
+}
+.card-title {
+  font-size: 15px; font-weight: 600; display: flex; align-items: center; gap: 8px;
+}
+.card-health {
+  width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0;
+}
+.card-health.green { background: var(--green); box-shadow: 0 0 8px rgba(63,185,80,0.4); }
+.card-health.yellow { background: var(--yellow); box-shadow: 0 0 8px rgba(210,153,34,0.4); }
+.card-health.red { background: var(--red); box-shadow: 0 0 8px rgba(248,81,73,0.4); }
+
+.card-tech { font-size: 10px; color: var(--text-muted); background: var(--bg-primary); padding: 2px 8px; border-radius: 4px; }
+
+.service-tags { display: flex; gap: 6px; margin-bottom: 14px; flex-wrap: wrap; }
+.service-tag {
+  font-size: 11px; padding: 3px 8px; border-radius: 4px;
+  display: flex; align-items: center; gap: 4px;
+}
+.service-tag.web { background: var(--blue-bg); color: var(--blue); }
+.service-tag.mobile { background: var(--purple-bg); color: var(--purple); }
+.service-tag.backend { background: var(--green-bg); color: var(--green); }
+.service-tag.data { background: var(--yellow-bg); color: var(--yellow); }
+.service-tag .mini-dot { width: 5px; height: 5px; border-radius: 50%; }
+
+.card-metrics {
+  display: grid; grid-template-columns: 1fr 1fr 1fr;
+  gap: 8px; margin-bottom: 14px;
+}
+.metric {
+  font-size: 11px; color: var(--text-secondary);
+  display: flex; flex-direction: column; gap: 2px;
+}
+.metric strong { font-size: 18px; font-weight: 600; color: var(--text-primary); }
+.metric.green strong { color: var(--green); }
+.metric.yellow strong { color: var(--yellow); }
+.metric.red strong { color: var(--red); }
+
+.card-progress {
+  height: 3px; background: var(--bg-primary); border-radius: 2px; overflow: hidden;
+}
+.card-progress .bar { height: 100%; border-radius: 2px; background: var(--green); transition: width 0.3s; }
+.card-progress .bar.warn { background: var(--yellow); }
+
+.card-footer {
+  display: flex; justify-content: space-between; align-items: center;
+  margin-top: 12px; font-size: 11px; color: var(--text-muted);
+}
+
+/* Escalation badge on project card */
+.card-escalation-badge {
+  position: absolute; top: -8px; right: -8px;
+  background: var(--red); color: #fff; font-size: 10px; font-weight: 700;
+  width: 22px; height: 22px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 0 12px rgba(248,81,73,0.5);
+  animation: pulse-dot 2s infinite;
+}
+
+/* ==========================================================================
+   PROJECT DETAIL VIEW
+   ========================================================================== */
+.detail-header {
+  display: flex; align-items: center; gap: 12px; margin-bottom: 24px;
+}
+.btn-back {
+  background: transparent; border: 1px solid var(--border); color: var(--text-secondary);
+  padding: 4px 10px; border-radius: 6px; font-size: 12px; cursor: pointer;
+  transition: all 0.15s;
+}
+.btn-back:hover { background: var(--bg-hover); color: var(--text-primary); }
+
+.detail-title { font-size: 18px; font-weight: 600; }
+.detail-subtitle { font-size: 13px; color: var(--text-secondary); margin-left: 4px; }
+
+.detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px; }
+
+.panel {
+  background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: var(--radius-lg); padding: 20px;
+}
+.panel.full-width { grid-column: 1 / -1; }
+.panel h3 { font-size: 13px; font-weight: 600; margin-bottom: 16px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-secondary); }
+
+/* Service Topology */
+.topology { display: flex; flex-direction: column; gap: 16px; }
+.topology-layer { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+.topology-label {
+  font-size: 10px; color: var(--text-muted); text-transform: uppercase;
+  letter-spacing: 0.5px; width: 80px; flex-shrink: 0; text-align: right;
+}
+
+.service-node {
+  background: var(--bg-primary); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 10px 14px; min-width: 140px;
+  font-size: 12px; position: relative;
+}
+.service-node.healthy { border-left: 3px solid var(--green); }
+.service-node.warning { border-left: 3px solid var(--yellow); }
+.service-node.critical { border-left: 3px solid var(--red); }
+.service-node .svc-name { font-weight: 600; margin-bottom: 4px; }
+.service-node .svc-meta { font-size: 10px; color: var(--text-muted); display: flex; gap: 8px; }
+.service-node .svc-agent {
+  font-size: 10px; padding: 1px 6px; border-radius: 3px; margin-top: 6px;
+  display: inline-block;
+}
+.service-node .svc-agent.active { background: var(--green-bg); color: var(--green); }
+.service-node .svc-agent.blocked { background: var(--red-bg); color: var(--red); }
+.service-node .svc-agent.idle { background: var(--bg-hover); color: var(--text-muted); }
+
+/* Constraint Matrix */
+.constraint-row {
+  display: flex; align-items: center; padding: 8px 0;
+  border-bottom: 1px solid var(--border); font-size: 12px;
+}
+.constraint-row:last-child { border-bottom: none; }
+.constraint-name { flex: 1; }
+.constraint-service { width: 90px; color: var(--text-muted); font-size: 11px; }
+.constraint-status { width: 60px; text-align: right; font-size: 11px; font-weight: 500; }
+.constraint-status.pass { color: var(--green); }
+.constraint-status.fail { color: var(--red); }
+.constraint-status.warn { color: var(--yellow); }
+
+/* Agent Timeline */
+.timeline { position: relative; padding-left: 20px; }
+.timeline::before {
+  content: ''; position: absolute; left: 6px; top: 4px; bottom: 4px;
+  width: 1px; background: var(--border);
+}
+.timeline-item { position: relative; margin-bottom: 14px; font-size: 12px; }
+.timeline-item::before {
+  content: ''; position: absolute; left: -17px; top: 4px;
+  width: 8px; height: 8px; border-radius: 50%; background: var(--border);
+}
+.timeline-item.done::before { background: var(--green); }
+.timeline-item.active::before { background: var(--blue); box-shadow: 0 0 6px var(--blue); animation: pulse 2s infinite; }
+.timeline-item.error::before { background: var(--red); }
+@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+
+.timeline-time { font-size: 10px; color: var(--text-muted); }
+.timeline-desc { color: var(--text-primary); margin-top: 2px; }
+.timeline-agent { font-size: 10px; color: var(--text-muted); font-family: var(--font-mono); }
+
+/* Decisions */
+.decision-item {
+  padding: 10px 0; border-bottom: 1px solid var(--border); cursor: pointer;
+  transition: background 0.15s;
+}
+.decision-item:last-child { border-bottom: none; }
+.decision-item:hover { background: var(--bg-hover); margin: 0 -12px; padding: 10px 12px; border-radius: 4px; }
+.decision-id { font-family: var(--font-mono); font-size: 10px; color: var(--blue); }
+.decision-topic { font-size: 13px; font-weight: 500; margin: 2px 0; }
+.decision-meta { font-size: 10px; color: var(--text-muted); }
+
+/* ==========================================================================
+   DECISION MAP VIEW
+   ========================================================================== */
+.decision-map-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 12px; margin-top: 16px;
+}
+
+/* ==========================================================================
+   LIVE INSPECTION VIEW
+   ========================================================================== */
+.inspect-header {
+  display: flex; align-items: center; gap: 16px; margin-bottom: 20px;
+  padding: 16px 20px; background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+}
+.inspect-agent-dot {
+  width: 14px; height: 14px; border-radius: 50%; flex-shrink: 0;
+}
+.inspect-agent-dot.running { background: var(--green); box-shadow: 0 0 12px rgba(63,185,80,0.6); animation: pulse 1.5s infinite; }
+.inspect-agent-dot.blocked { background: var(--red); box-shadow: 0 0 12px rgba(248,81,73,0.6); animation: pulse 1.5s infinite; }
+.inspect-agent-dot.idle { background: var(--text-muted); }
+.inspect-agent-info { flex: 1; }
+.inspect-agent-info h2 { font-size: 16px; font-weight: 600; }
+.inspect-agent-info .sub { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+.inspect-meta { text-align: right; }
+.inspect-meta .heartbeat { font-size: 11px; color: var(--text-muted); font-family: var(--font-mono); }
+.inspect-meta .mode-badge {
+  display: inline-block; font-size: 10px; padding: 3px 8px; border-radius: 4px;
+  margin-top: 4px; font-weight: 600;
+}
+.inspect-meta .mode-badge.cloud { background: var(--purple-bg); color: var(--purple); }
+.inspect-meta .mode-badge.local { background: var(--blue-bg); color: var(--blue); }
+
+.inspect-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px; }
+
+/* Current iteration */
+.current-iter { }
+.current-iter .iter-phase {
+  font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px;
+  color: var(--blue); font-weight: 600; margin-bottom: 6px;
+}
+.current-iter .iter-action {
+  font-size: 14px; font-weight: 500; margin-bottom: 12px; line-height: 1.4;
+}
+.current-iter .iter-meta-row {
+  display: flex; gap: 20px; font-size: 11px; color: var(--text-muted);
+}
+
+/* Live check progress */
+.check-progress { margin-top: 16px; }
+.check-progress-item {
+  display: flex; align-items: center; gap: 8px; padding: 6px 0; font-size: 12px;
+}
+.check-progress-item .check-icon { width: 16px; text-align: center; flex-shrink: 0; }
+.check-progress-item .check-icon.done { color: var(--green); }
+.check-progress-item .check-icon.running { color: var(--blue); animation: pulse 1s infinite; }
+.check-progress-item .check-icon.pending { color: var(--text-muted); }
+.check-progress-item .check-name { flex: 1; }
+.check-progress-item .check-time { font-size: 10px; color: var(--text-muted); font-family: var(--font-mono); }
+
+/* Changed files */
+.file-list { margin-top: 12px; }
+.file-item {
+  display: flex; align-items: center; gap: 8px; padding: 5px 0;
+  font-size: 12px; font-family: var(--font-mono);
+}
+.file-item .file-name { color: var(--blue); flex: 1; }
+.file-item .file-diff { font-size: 10px; }
+.file-item .file-diff.add { color: var(--green); }
+.file-item .file-diff.mod { color: var(--yellow); }
+
+/* Iteration history table */
+.iter-table { width: 100%; font-size: 12px; border-collapse: collapse; }
+.iter-table th {
+  text-align: left; font-size: 10px; color: var(--text-muted); font-weight: 600;
+  padding: 6px 8px; border-bottom: 1px solid var(--border);
+}
+.iter-table td { padding: 8px; border-bottom: 1px solid var(--border); }
+.iter-table tr:hover td { background: var(--bg-hover); }
+.iter-table .iter-num { font-family: var(--font-mono); width: 50px; }
+.iter-table .iter-status { width: 30px; text-align: center; }
+.iter-table .iter-status.pass { color: var(--green); }
+.iter-table .iter-status.fail { color: var(--red); }
+.iter-table .iter-action-col { }
+.iter-table .iter-cost { font-family: var(--font-mono); font-size: 10px; color: var(--text-muted); width: 60px; text-align: right; }
+.iter-table .iter-time { font-size: 10px; color: var(--text-muted); width: 50px; text-align: right; }
+
+/* Resource stats bar */
+.resource-bar {
+  display: flex; gap: 20px; padding: 12px 16px;
+  background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: var(--radius); margin-bottom: 20px;
+}
+.resource-stat { font-size: 11px; color: var(--text-secondary); }
+.resource-stat strong { font-size: 15px; color: var(--text-primary); display: block; }
+
+/* Inspection actions */
+.inspect-actions {
+  display: flex; gap: 10px; padding: 12px 16px;
+  background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+}
+.inspect-actions .btn-action {
+  padding: 8px 20px; border-radius: 6px; font-size: 12px; font-weight: 600;
+  border: 1px solid var(--border); background: transparent;
+  color: var(--text-primary); cursor: pointer; transition: all 0.15s;
+}
+.inspect-actions .btn-action:hover { background: var(--bg-hover); }
+.inspect-actions .btn-action.warn { border-color: var(--yellow); color: var(--yellow); }
+.inspect-actions .btn-action.warn:hover { background: var(--yellow-bg); }
+.inspect-actions .btn-action.danger { border-color: var(--red); color: var(--red); }
+.inspect-actions .btn-action.danger:hover { background: var(--red-bg); }
+.inspect-actions .btn-action.primary { background: var(--blue); border-color: var(--blue); color: #fff; }
+
+/* Clickable agent entries */
+.clickable-agent { cursor: pointer; transition: all 0.15s; }
+.clickable-agent:hover { text-decoration: underline; color: var(--blue); }
+
+/* ==========================================================================
+   AGENT CONSOLE — async human→agent messaging
+   ========================================================================== */
+.console-panel {
+  margin-top: 16px; background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: var(--radius-lg); overflow: hidden;
+  display: flex; flex-direction: column; max-height: 420px;
+}
+.console-header {
+  padding: 10px 16px; border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: space-between;
+}
+.console-header h4 { font-size: 11px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
+.console-header .console-status { font-size: 10px; color: var(--text-muted); }
+.console-header .console-status.synced { color: var(--green); }
+
+.console-messages {
+  flex: 1; overflow-y: auto; padding: 12px 16px;
+  display: flex; flex-direction: column; gap: 10px;
+  min-height: 120px; max-height: 240px;
+}
+.console-msg {
+  max-width: 80%; padding: 8px 12px; border-radius: 8px; font-size: 12px; line-height: 1.5;
+  position: relative;
+}
+.console-msg.human {
+  align-self: flex-end; background: var(--blue-bg); border: 1px solid rgba(88,166,255,0.2);
+}
+.console-msg.agent {
+  align-self: flex-start; background: var(--bg-primary); border: 1px solid var(--border);
+}
+.console-msg .msg-time {
+  font-size: 9px; color: var(--text-muted); margin-top: 4px;
+  display: flex; align-items: center; gap: 6px;
+}
+.console-msg .msg-status { font-size: 9px; }
+.console-msg .msg-status.delivered { color: var(--yellow); }
+.console-msg .msg-status.acknowledged { color: var(--green); }
+
+.console-empty {
+  text-align: center; color: var(--text-muted); font-size: 12px;
+  padding: 30px 0;
+}
+
+.console-input-row {
+  display: flex; gap: 8px; padding: 10px 16px; border-top: 1px solid var(--border);
+  align-items: center;
+}
+.console-input {
+  flex: 1; background: var(--bg-primary); border: 1px solid var(--border);
+  border-radius: 6px; padding: 8px 12px; font-size: 12px;
+  color: var(--text-primary); outline: none; font-family: var(--font-sans);
+}
+.console-input:focus { border-color: var(--blue); }
+.console-input::placeholder { color: var(--text-muted); }
+.console-send {
+  padding: 8px 16px; border-radius: 6px; font-size: 12px; font-weight: 600;
+  border: 1px solid var(--blue); background: var(--blue); color: #fff;
+  cursor: pointer; white-space: nowrap; transition: filter 0.15s;
+}
+.console-send:hover { filter: brightness(1.15); }
+
+.console-quick-actions {
+  display: flex; gap: 6px; padding: 0 16px 10px; flex-wrap: wrap;
+}
+.console-quick {
+  font-size: 10px; padding: 3px 10px; border-radius: 4px;
+  border: 1px solid var(--border); background: transparent;
+  color: var(--text-secondary); cursor: pointer; transition: all 0.15s;
+  white-space: nowrap;
+}
+.console-quick:hover { background: var(--bg-hover); color: var(--text-primary); border-color: var(--blue); }
+
+/* ==========================================================================
+   HIDDEN / TOGGLE
+   ========================================================================== */
+.hidden { display: none !important; }
+</style>
+</head>
+<body>
+
+<!-- ======================================================================
+     TOP BAR
+     ====================================================================== -->
+<header class="topbar">
+  <div class="topbar-left">
+    <div class="logo">🔭 <span>控制塔</span></div>
+    <div class="global-stat"><span class="dot green"></span> <strong>4</strong> 个项目</div>
+    <div class="global-stat"><span class="dot blue"></span> <strong>8</strong> 个 Agent 运行中</div>
+    <div class="global-stat"><span class="dot red"></span> <strong id="escalationCount">1</strong> 个升级待处理</div>
+    <div class="global-stat" style="font-family:var(--font-mono)">⏣ 今日 Token 2.4M</div>
+  </div>
+  <div class="topbar-right">
+    <input class="search-box" placeholder="搜索项目、服务、决策..." />
+    <span style="font-size:12px;color:var(--text-muted)">最后更新：3 秒前</span>
+  </div>
+</header>
+
+<!-- ======================================================================
+     APP BODY
+     ====================================================================== -->
+<div class="app-body">
+
+  <!-- SIDEBAR -->
+  <aside class="sidebar">
+    <div class="sidebar-section">
+      <div class="sidebar-label">导航</div>
+      <div class="nav-item active" data-view="fleet" onclick="showView('fleet')">
+        📡 项目总览
+      </div>
+      <div class="nav-item" data-view="decisions" onclick="showView('decisions')">
+        📋 决策地图
+      </div>
+      <div class="nav-item">
+        💰 成本报告
+      </div>
+    </div>
+
+    <div class="sidebar-section">
+      <div class="sidebar-label">
+        Escalation Inbox
+        <span class="badge" id="inboxBadge">1 待处理</span>
+      </div>
+
+      <!-- Escalation 1: Active & Urgent -->
+      <div class="escalation-item urgent" id="esc-item-1" onclick="openDecisionDrawer('esc-1')">
+        <div class="esc-project">data-pipeline</div>
+        <div class="esc-title">选择消息队列方案：Kafka vs Redis Streams</div>
+        <div class="esc-meta">⏳ 等待 2h 34m · Agent #3 · stream-processor</div>
+        <div class="esc-cta">点击查看详情 →</div>
+      </div>
+
+      <!-- Escalation 2: Resolved (for reference) -->
+      <div class="escalation-item resolved" id="esc-item-2">
+        <div class="esc-project">payment-gateway</div>
+        <div class="esc-title">缓存过期策略需要确认</div>
+        <div class="esc-meta">✅ 已解决 · 1h 前 · 选择了滑动窗口过期</div>
+      </div>
+
+      <!-- 升级 3：一般优先级，等待中 -->
+      <div class="escalation-item normal" id="esc-item-3" onclick="openDecisionDrawer('esc-3')">
+        <div class="esc-project">user-mobile</div>
+        <div class="esc-title">iOS 和 Android 是否共享导航组件？</div>
+        <div class="esc-meta">⏳ 等待 30m · Agent #1 · mobile-app</div>
+        <div class="esc-cta">点击查看详情 →</div>
+      </div>
+    </div>
+
+    <div class="sidebar-section">
+      <div class="sidebar-label">实时动态</div>
+      <div style="font-size:11px;color:var(--text-muted);line-height:1.8">
+        <div>🟢 tracker-system · agent-2 · 自检通过 · 3m</div>
+        <div>🟢 user-mobile · agent-1 · iteration 4/7 · 8m</div>
+        <div>🟡 payment-gateway · agent-1 · 约束警告 · 15m</div>
+        <div>🟢 tracker-system · agent-3 · 已启动 · 22m</div>
+        <div>🔴 data-pipeline · agent-3 · 触发升级 · 2h</div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- MAIN CONTENT -->
+  <main class="main" id="mainContent">
+
+    <!-- ============================================================
+         VIEW: FLEET OVERVIEW
+         ============================================================ -->
+    <div id="view-fleet">
+      <div class="fleet-header">
+        <h2>项目列表</h2>
+        <p>4 个项目 · 8 个 Agent 运行中 · <span style="color:var(--red)">1 个升级待处理</span> · 今日 Token 2.4M</p>
+      </div>
+
+      <div class="fleet-grid">
+
+        <!-- tracker-system -->
+        <div class="project-card" onclick="showProjectDetail('tracker-system')">
+          <div class="card-header">
+            <div class="card-title"><span class="card-health green"></span> tracker-system</div>
+            <span class="card-tech">TypeScript</span>
+          </div>
+          <div class="service-tags">
+            <span class="service-tag web"><span class="mini-dot" style="background:var(--green)"></span> admin-web</span>
+            <span class="service-tag mobile"><span class="mini-dot" style="background:var(--green)"></span> mobile-app</span>
+            <span class="service-tag backend"><span class="mini-dot" style="background:var(--green)"></span> tracker-service</span>
+            <span class="service-tag backend"><span class="mini-dot" style="background:var(--green)"></span> tracker-admin</span>
+            <span class="service-tag data"><span class="mini-dot" style="background:var(--green)"></span> postgres</span>
+          </div>
+          <div class="card-metrics">
+            <div class="metric green"><strong>100%</strong> 约束合规</div>
+            <div class="metric"><strong>3</strong> 个 Agent</div>
+            <div class="metric"><strong>87%</strong> 覆盖率</div>
+          </div>
+          <div class="card-progress"><div class="bar" style="width:78%"></div></div>
+          <div class="card-footer"><span>阶段：实现中 · 第 4/7 轮</span><span>⏣ 680k</span></div>
+        </div>
+
+        <!-- payment-gateway -->
+        <div class="project-card" onclick="showProjectDetail('payment-gateway')">
+          <div class="card-header">
+            <div class="card-title"><span class="card-health yellow"></span> payment-gateway</div>
+            <span class="card-tech">Go</span>
+          </div>
+          <div class="service-tags">
+            <span class="service-tag backend"><span class="mini-dot" style="background:var(--green)"></span> gateway-api</span>
+            <span class="service-tag backend"><span class="mini-dot" style="background:var(--yellow)"></span> billing-worker</span>
+            <span class="service-tag data"><span class="mini-dot" style="background:var(--green)"></span> mysql</span>
+            <span class="service-tag data"><span class="mini-dot" style="background:var(--green)"></span> redis</span>
+          </div>
+          <div class="card-metrics">
+            <div class="metric yellow"><strong>85%</strong> 约束合规</div>
+            <div class="metric"><strong>2</strong> 个 Agent</div>
+            <div class="metric"><strong>76%</strong> 覆盖率</div>
+          </div>
+          <div class="card-progress"><div class="bar warn" style="width:45%"></div></div>
+          <div class="card-footer"><span>⚠ 1 个约束警告</span><span>⏣ 420k</span></div>
+        </div>
+
+        <!-- user-mobile -->
+        <div class="project-card" onclick="showProjectDetail('user-mobile')">
+          <div class="card-header">
+            <div class="card-title"><span class="card-health green"></span> user-mobile</div>
+            <span class="card-tech">React Native</span>
+          </div>
+          <div class="service-tags">
+            <span class="service-tag mobile"><span class="mini-dot" style="background:var(--green)"></span> iOS-app</span>
+            <span class="service-tag mobile"><span class="mini-dot" style="background:var(--green)"></span> Android-app</span>
+            <span class="service-tag backend"><span class="mini-dot" style="background:var(--green)"></span> user-api</span>
+            <span class="service-tag data"><span class="mini-dot" style="background:var(--green)"></span> postgres</span>
+          </div>
+          <div class="card-metrics">
+            <div class="metric green"><strong>100%</strong> 约束合规</div>
+            <div class="metric"><strong>2</strong> 个 Agent</div>
+            <div class="metric"><strong>92%</strong> 覆盖率</div>
+          </div>
+          <div class="card-progress"><div class="bar" style="width:60%"></div></div>
+          <div class="card-footer"><span>阶段：实现中 · 第 4/7 轮</span><span>⏣ 510k</span></div>
+        </div>
+
+        <!-- data-pipeline (CRITICAL — has escalation badge) -->
+        <div class="project-card critical" onclick="showProjectDetail('data-pipeline')" style="position:relative">
+          <div class="card-escalation-badge" title="1 个升级待处理">!</div>
+          <div class="card-header">
+            <div class="card-title"><span class="card-health red"></span> data-pipeline</div>
+            <span class="card-tech">Python</span>
+          </div>
+          <div class="service-tags">
+            <span class="service-tag backend"><span class="mini-dot" style="background:var(--green)"></span> etl-worker</span>
+            <span class="service-tag backend"><span class="mini-dot" style="background:var(--red)"></span> stream-processor</span>
+            <span class="service-tag data"><span class="mini-dot" style="background:var(--green)"></span> clickhouse</span>
+            <span class="service-tag data"><span class="mini-dot" style="background:var(--red)"></span> MQ 待定</span>
+          </div>
+          <div class="card-metrics">
+            <div class="metric red"><strong>60%</strong> 约束合规</div>
+            <div class="metric"><strong>1</strong> Agent 阻塞</div>
+            <div class="metric"><strong>—</strong> 覆盖率</div>
+          </div>
+          <div class="card-progress"><div class="bar warn" style="width:30%"></div></div>
+          <div class="card-footer"><span>🔴 1 个升级 · Agent 阻塞</span><span>⏣ 790k</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============================================================
+         VIEW: PROJECT DETAIL
+         ============================================================ -->
+    <div id="view-project-detail" class="hidden">
+      <div class="detail-header">
+        <button class="btn-back" onclick="showView('fleet')">← 返回列表</button>
+        <span class="card-health green" id="detail-health"></span>
+        <span class="detail-title" id="detail-name"></span>
+        <span class="detail-subtitle" id="detail-meta"></span>
+      </div>
+      <div class="detail-grid">
+        <div class="panel">
+          <h3>🕸 服务拓扑</h3>
+          <div class="topology" id="detail-topology"></div>
+        </div>
+        <div class="panel">
+          <h3>📏 约束合规</h3>
+          <div id="detail-constraints"></div>
+        </div>
+      </div>
+      <div class="detail-grid">
+        <div class="panel">
+          <h3>📡 Agent 活动时间线</h3>
+          <div class="timeline" id="detail-timeline"></div>
+        </div>
+        <div class="panel">
+          <h3>📋 最近决策</h3>
+          <div id="detail-decisions"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============================================================
+         VIEW: DECISION MAP
+         ============================================================ -->
+    <div id="view-decisions" class="hidden">
+      <div class="fleet-header">
+        <h2>决策地图</h2>
+        <p>跨所有项目的架构决策记录 · 点击任一决策查看详细上下文</p>
+      </div>
+      <div class="decision-map-grid">
+        <div class="panel" style="cursor:pointer" onclick="alert('决策详情（待实现）')">
+          <div class="decision-id">D-20260607-001</div>
+          <div class="decision-topic" style="margin:6px 0">选择 Repository 模式而非 TypeORM 直连</div>
+          <div class="decision-meta">tracker-system · 低风险 · 今天</div>
+        </div>
+        <div class="panel" style="cursor:pointer">
+          <div class="decision-id">D-20260606-003</div>
+          <div class="decision-topic" style="margin:6px 0">Go 并发模型选择 goroutine pool</div>
+          <div class="decision-meta">payment-gateway · 中风险 · 昨天</div>
+        </div>
+        <div class="panel" style="cursor:pointer">
+          <div class="decision-id">D-20260606-004</div>
+          <div class="decision-topic" style="margin:6px 0">ETL 调度选择 Airflow 而非 Prefect</div>
+          <div class="decision-meta">data-pipeline · 中风险 · 昨天</div>
+        </div>
+        <div class="panel" style="cursor:pointer">
+          <div class="decision-id">D-20260606-001</div>
+          <div class="decision-topic" style="margin:6px 0">移动端状态管理选择 Zustand 而非 Redux</div>
+          <div class="decision-meta">user-mobile · 低风险 · 昨天</div>
+        </div>
+        <div class="panel" style="cursor:pointer">
+          <div class="decision-id">D-20260604-001</div>
+          <div class="decision-topic" style="margin:6px 0">支付幂等性使用 Redis 锁而非 DB 唯一约束</div>
+          <div class="decision-meta">payment-gateway · 中风险 · 3 天前</div>
+        </div>
+        <div class="panel" style="cursor:pointer">
+          <div class="decision-id">D-20260605-002</div>
+          <div class="decision-topic" style="margin:6px 0">移动端使用 React Native 新架构 (Fabric)</div>
+          <div class="decision-meta">tracker-system · 中风险 · 2 天前</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============================================================
+         VIEW: LIVE INSPECTION (cloud agent runtime view)
+         ============================================================ -->
+    <div id="view-live-inspection" class="hidden">
+      <div class="detail-header">
+        <button class="btn-back" onclick="showView('fleet')">← 返回列表</button>
+        <span style="font-size:12px;color:var(--text-muted)">Live Inspection</span>
+      </div>
+
+      <!-- Agent identity bar -->
+      <div class="inspect-header" id="inspect-header">
+        <!-- dynamically filled -->
+      </div>
+
+      <!-- Resource bar -->
+      <div class="resource-bar" id="inspect-resources">
+        <!-- dynamically filled -->
+      </div>
+
+      <!-- Main grid: current iteration + history -->
+      <div class="inspect-grid">
+        <!-- Current iteration panel -->
+        <div class="panel">
+          <h3>⚡ 当前迭代</h3>
+          <div class="current-iter" id="inspect-current">
+            <!-- dynamically filled -->
+          </div>
+          <div class="check-progress" id="inspect-checks">
+            <!-- dynamically filled -->
+          </div>
+          <div class="file-list" id="inspect-files">
+            <!-- dynamically filled -->
+          </div>
+        </div>
+
+        <!-- Iteration history panel -->
+        <div class="panel">
+          <h3>📜 迭代历史</h3>
+          <div style="max-height:320px;overflow-y:auto">
+            <table class="iter-table" id="inspect-history">
+              <!-- dynamically filled -->
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Actions -->
+      <div class="inspect-actions" id="inspect-actions">
+        <!-- dynamically filled -->
+      </div>
+
+      <!-- Agent Console — async human↔agent messaging -->
+      <div class="console-panel" id="inspect-console">
+        <div class="console-header">
+          <h4>💬 Agent 控制台</h4>
+          <span class="console-status synced" id="console-sync-status">消息同步: agent 下一轮自检时拉取</span>
+        </div>
+        <div class="console-messages" id="console-messages">
+          <!-- dynamically filled -->
+        </div>
+        <div class="console-quick-actions" id="console-quick">
+          <!-- dynamically filled -->
+        </div>
+        <div class="console-input-row">
+          <input class="console-input" id="console-input"
+                 placeholder="输入指令或问题，Agent 在下一轮自检时拉取..."
+                 onkeydown="if(event.key==='Enter')sendConsoleMessage()" />
+          <button class="console-send" onclick="sendConsoleMessage()">发送 →</button>
+        </div>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<!-- ======================================================================
+     DECISION DRAWER (slides from right)
+     ====================================================================== -->
+<div class="drawer-overlay" id="drawerOverlay" onclick="closeDecisionDrawer()"></div>
+<div class="drawer" id="decisionDrawer">
+  <!-- dynamically filled by openDecisionDrawer() -->
+</div>
+
+<!-- ======================================================================
+     SCRIPTS
+     ====================================================================== -->
+<script>
+// ==========================================================================
+// Escalation Data — full context for each decision
+// ==========================================================================
+const escalations = {
+  'esc-1': {
+    id: 'esc-1',
+    project: 'data-pipeline',
+    projectHealth: 'red',
+    agent: 'Agent #3',
+    service: 'stream-processor',
+    waiting: '2h 34m',
+    urgency: 'urgent',
+    title: '选择消息队列方案：Kafka vs Redis Streams',
+    context: `stream-processor 需要实现实时事件流的缓冲和分发。当前数据量预估为 50k msg/s，需要至少一次投递保证。项目已有的基础设施包括 Redis 7（用于缓存），但没有 Kafka 集群。
+
+该决策直接影响架构约束：
+• no_new_deps_without_adr — 无论选哪个都引入新依赖，需要记录 ADR
+• layer_dependency — 消息队列会成为 infrastructure 层的新组件
+
+Agent 在自检时触发了 escalation：因为这属于 "new_dependency" 类型，按 DoD 规则必须升级人工。`,
+    options: [
+      {
+        name: 'Apache Kafka',
+        recommended: true,
+        pros: ['吞吐量 1M+ msg/s，远超需求', '持久化 + 消息回溯原生支持', '生态成熟，ClickHouse Kafka Engine 直连'],
+        cons: ['需要部署 ZooKeeper/KRaft 集群', '运维复杂度高（当前团队无 Kafka 经验）', '引入 Java 依赖链到 Python 项目'],
+      },
+      {
+        name: 'Redis Streams',
+        recommended: false,
+        pros: ['复用已有 Redis 基础设施，零运维增量', 'Python redis-py 库已使用，无新语言依赖', '5.0+ 原生支持 consumer group'],
+        cons: ['50k msg/s 接近 Redis Streams 性能上限', '消息持久化弱于 Kafka，断电可能丢数据', 'ClickHouse 无原生 Redis Streams 连接器'],
+      }
+    ],
+    reasoning: `Agent 倾向 Kafka，理由：
+1. 50k msg/s 已经接近 Redis Streams 的单实例上限，后续增长空间有限
+2. ClickHouse 的 Kafka Engine 可以实现消息到 OLAP 的零代码接入
+3. 虽然运维成本是短期痛点，但团队已经在规划引入 Kafka 用于其他业务，早晚要面对
+
+风险提示：如果选 Kafka，建议先做 PoC 验证 ClickHouse Kafka Engine 的延迟是否满足需求。`,
+    impact: {
+      constraints: ['no_new_deps_without_adr (将触发)', 'layer_dependency (新增 infra 组件)'],
+      services: ['stream-processor', 'clickhouse', 'docker-compose (新增 kafka 服务)'],
+      cost_estimate: 'Kafka 集群约 +2GB 内存 / +4 vCPU / 运维人力 +0.5 人周/月',
+    }
+  },
+
+  'esc-3': {
+    id: 'esc-3',
+    project: 'user-mobile',
+    projectHealth: 'green',
+    agent: 'Agent #1',
+    service: 'mobile-app',
+    waiting: '30m',
+    urgency: 'normal',
+    title: 'iOS 和 Android 是否共享导航组件？',
+    context: `用户模块的导航结构在 iOS 和 Android 上存在平台差异：iOS 期望底部 Tab Bar 风格，Android 期望 Material Design 的 Navigation Rail。
+
+Agent 识别到两个方案各有优劣，且涉及 UI 一致性 vs 平台原生体验的 trade-off。这属于设计决策而非纯技术决策，按 DoD 的 ambiguous_requirements 规则升级。`,
+    options: [
+      {
+        name: '平台各自实现导航，共享业务逻辑',
+        recommended: true,
+        pros: ['完全遵循各平台设计规范', '用户感知更原生', '未来平台差异更容易处理'],
+        cons: ['导航代码无法复用', '新增页面需要在两处注册'],
+      },
+      {
+        name: '统一导航组件，平台自适应',
+        recommended: false,
+        pros: ['一次编写，两处运行', '维护成本低', '导航行为一致性好'],
+        cons: ['iOS 用户可能觉得不够 iOS', '特殊情况需要在组件内写 if-platform'],
+      }
+    ],
+    reasoning: `Agent 倾向平台各自实现，理由：
+1. 项目已有 platform-specific 代码组织模式（*.ios.ts / *.android.ts）
+2. 导航层代码量小（~200 行/平台），复用收益不大
+3. 业务逻辑（screens, hooks, stores）仍然 100% 共享`,
+    impact: {
+      constraints: ['no_new_deps_without_adr (无影响)'],
+      services: ['iOS-app', 'Android-app'],
+      cost_estimate: '约 +2 天开发时间（导航代码双写），长期维护成本相近',
+    }
+  }
+};
+
+// ==========================================================================
+// View switching
+// ==========================================================================
+function showView(view) {
+  document.querySelectorAll('[id^="view-"]').forEach(el => el.classList.add('hidden'));
+  const target = document.getElementById('view-' + view);
+  if (target) target.classList.remove('hidden');
+  document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+  const navItem = document.querySelector(`[data-view="${view}"]`);
+  if (navItem) navItem.classList.add('active');
+}
+
+// ==========================================================================
+// Live Inspection — mock data & rendering
+// ==========================================================================
+const agentLiveStates = {
+  'agent-2-tracker': {
+    id: 'agent-2',
+    project: 'tracker-system',
+    service: 'tracker-service',
+    mode: 'cloud',                          // cloud | local
+    status: 'running',                      // running | blocked | idle
+    current_iteration: 4,
+    current_phase: '自检中',
+    current_action: '运行全部约束检查，验证认证中间件的改动未破坏架构约束',
+    heartbeat: '2 秒前',
+    started: '1h 22m',
+    iterations: [
+      { num: 4, status: 'running', action: '实现用户认证中间件', cost: '45k', time: '16:32' },
+      { num: 3, status: 'pass',   action: '重构错误处理逻辑',     cost: '38k', time: '16:15' },
+      { num: 2, status: 'fail',   action: '添加 JWT 验证（覆盖率不足）', cost: '52k', time: '15:50' },
+      { num: 1, status: 'pass',   action: '搭建项目骨架 + DoD 配置', cost: '28k', time: '15:10' },
+    ],
+    self_checks: [
+      { name: 'no_circular_deps',      status: 'done',    time: '2s' },
+      { name: 'layer_dependency',       status: 'done',    time: '3s' },
+      { name: 'no_new_deps_without_adr',status: 'done',    time: '1s' },
+      { name: 'types (tsc --noEmit)',   status: 'running', time: '...' },
+      { name: 'lint (eslint)',          status: 'pending', time: '—' },
+      { name: 'tests (jest)',           status: 'pending', time: '—' },
+      { name: 'coverage',               status: 'pending', time: '—' },
+      { name: 'security (audit-ci)',    status: 'pending', time: '—' },
+    ],
+    files_changed: [
+      { name: 'src/middleware/auth.ts',       diff: '+120', type: 'add' },
+      { name: 'src/middleware/index.ts',      diff: '+3',   type: 'mod' },
+      { name: 'tests/middleware/auth.test.ts',diff: '+85',  type: 'add' },
+      { name: 'src/types/auth.d.ts',          diff: '+22',  type: 'add' },
+    ],
+    resources: { tokens: '240k', estimated: '120k', elapsed: '1h 22m', rate: '2.9k/min' },
+    messages: [
+      { from: 'human', text: '认证中间件的 session 过期时间设为 24h，不要用默认的 7 天', time: '16:25', status: 'acknowledged' },
+      { from: 'agent', text: '已收到，已将 session 过期时间改为 24h。相关的 auth.ts L45 已更新。', time: '16:26', status: 'acknowledged' },
+      { from: 'human', text: '另外确认一下：refresh token 的逻辑是否也同步调整了？', time: '16:28', status: 'acknowledged' },
+      { from: 'agent', text: 'refresh token 过期时间 7 天保持不变（这是安全团队的规范）。只有 access token session 改为 24h。', time: '16:29', status: 'acknowledged' },
+    ],
+  },
+  'agent-3-data': {
+    id: 'agent-3',
+    project: 'data-pipeline',
+    service: 'stream-processor',
+    mode: 'cloud',
+    status: 'blocked',
+    current_iteration: 3,
+    current_phase: '等待人工决策',
+    current_action: '流处理器等待消息队列选型结果。Agent 已暂停迭代，等待升级事件 esc-1 的决策。',
+    heartbeat: '15 秒前',
+    started: '4h 10m',
+    iterations: [
+      { num: 3, status: 'blocked', action: '升级：选择消息队列方案', cost: '32k', time: '13:26' },
+      { num: 2, status: 'fail',    action: '引入 kafka-python 未记录 ADR', cost: '58k', time: '13:00' },
+      { num: 1, status: 'pass',    action: '搭建 stream-processor 骨架', cost: '41k', time: '12:20' },
+    ],
+    self_checks: [
+      { name: 'no_circular_deps',       status: 'done',  time: '2s' },
+      { name: 'layer_dependency',        status: 'done',  time: '1s' },
+      { name: 'no_new_deps_without_adr', status: 'done',  time: '1s' },
+    ],
+    files_changed: [
+      { name: 'src/stream/processor.py',    diff: '+95',  type: 'add' },
+      { name: 'src/stream/__init__.py',     diff: '+5',   type: 'mod' },
+      { name: 'requirements.txt',           diff: '+1',   type: 'mod' },
+    ],
+    resources: { tokens: '790k', estimated: '200k', elapsed: '4h 10m', rate: '3.1k/min' },
+  },
+  'agent-1-mobile': {
+    id: 'agent-1',
+    project: 'user-mobile',
+    service: 'mobile-app',
+    mode: 'local',
+    status: 'running',
+    current_iteration: 4,
+    current_phase: '实现中',
+    current_action: '为 iOS 和 Android 实现独立的导航组件，共享业务逻辑层',
+    heartbeat: '5 秒前',
+    started: '2h 05m',
+    iterations: [
+      { num: 4, status: 'running', action: '实现平台独立导航组件',     cost: '38k', time: '17:00' },
+      { num: 3, status: 'pass',    action: '实现生物识别认证页',       cost: '44k', time: '16:35' },
+      { num: 2, status: 'pass',    action: '添加用户资料编辑页面',     cost: '35k', time: '16:05' },
+      { num: 1, status: 'pass',    action: '搭建 React Native 项目',   cost: '25k', time: '15:30' },
+    ],
+    self_checks: [
+      { name: 'lint (eslint)',     status: 'done',    time: '3s' },
+      { name: 'types (tsc)',       status: 'done',    time: '5s' },
+      { name: 'tests (jest)',      status: 'running', time: '...' },
+      { name: 'coverage',          status: 'pending', time: '—' },
+    ],
+    files_changed: [
+      { name: 'src/nav/ios.tabs.tsx',       diff: '+210', type: 'add' },
+      { name: 'src/nav/android.rail.tsx',   diff: '+185', type: 'add' },
+      { name: 'src/nav/shared.ts',          diff: '+45',  type: 'add' },
+      { name: 'src/screens/profile.tsx',    diff: '+32',  type: 'mod' },
+    ],
+    resources: { tokens: '510k', estimated: '150k', elapsed: '2h 05m', rate: '4.1k/min' },
+  },
+};
+
+function openLiveInspection(agentKey) {
+  const a = agentLiveStates[agentKey];
+  if (!a) return;
+
+  // Header
+  const modeLabel = a.mode === 'cloud' ? '云 Agent' : '本地 Agent';
+  const modeClass = a.mode === 'cloud' ? 'cloud' : 'local';
+  document.getElementById('inspect-header').innerHTML = `
+    <span class="inspect-agent-dot ${a.status}"></span>
+    <div class="inspect-agent-info">
+      <h2>${a.id} · ${a.project} · ${a.service}</h2>
+      <div class="sub">启动于 ${a.started} · 心跳 ${a.heartbeat}</div>
+    </div>
+    <div class="inspect-meta">
+      <div class="heartbeat">🫀 ${a.heartbeat}</div>
+      <span class="mode-badge ${modeClass}">${modeLabel}</span>
+    </div>`;
+
+  // Resources
+  document.getElementById('inspect-resources').innerHTML = `
+    <div class="resource-stat"><strong>⏣ ${a.resources.tokens}</strong> 已消耗 Token</div>
+    <div class="resource-stat"><strong>⏣ ${a.resources.estimated}</strong> 预估剩余</div>
+    <div class="resource-stat"><strong>${a.resources.elapsed}</strong> 运行时长</div>
+    <div class="resource-stat"><strong>${a.resources.rate}</strong> 平均速率</div>`;
+
+  // Current iteration
+  document.getElementById('inspect-current').innerHTML = `
+    <div class="iter-phase">第 ${a.current_iteration} 轮 · ${a.current_phase}</div>
+    <div class="iter-action">${a.current_action}</div>
+    <div class="iter-meta-row">
+      <span>⏣ ${a.iterations.find(i => i.num === a.current_iteration)?.cost || '—'} 本轮</span>
+      <span>🫀 ${a.heartbeat}</span>
+    </div>`;
+
+  // Self-check progress
+  let checksHtml = '';
+  a.self_checks.forEach(c => {
+    let icon = '○', cls = 'pending';
+    if (c.status === 'done') { icon = '✓'; cls = 'done'; }
+    else if (c.status === 'running') { icon = '◉'; cls = 'running'; }
+    checksHtml += `<div class="check-progress-item">
+      <span class="check-icon ${cls}">${icon}</span>
+      <span class="check-name">${c.name}</span>
+      <span class="check-time">${c.time}</span></div>`;
+  });
+  document.getElementById('inspect-checks').innerHTML = checksHtml;
+
+  // Files changed
+  let filesHtml = '';
+  a.files_changed.forEach(f => {
+    filesHtml += `<div class="file-item">
+      <span class="file-name">${f.name}</span>
+      <span class="file-diff ${f.type}">${f.diff}</span></div>`;
+  });
+  document.getElementById('inspect-files').innerHTML = filesHtml;
+
+  // Iteration history
+  let historyHtml = `<tr><th>#</th><th></th><th>动作</th><th>Token</th><th>时间</th></tr>`;
+  a.iterations.forEach(i => {
+    const statusIcon = i.status === 'pass' ? '✓' : i.status === 'fail' ? '✗' : i.status === 'running' ? '◉' : '⏸';
+    const statusClass = i.status === 'fail' ? 'fail' : 'pass';
+    const rowStyle = i.status === 'running' ? 'font-weight:600' : '';
+    historyHtml += `<tr style="${rowStyle}">
+      <td class="iter-num">#${i.num}</td>
+      <td class="iter-status ${statusClass}">${statusIcon}</td>
+      <td class="iter-action-col">${i.action}</td>
+      <td class="iter-cost">⏣${i.cost}</td>
+      <td class="iter-time">${i.time}</td></tr>`;
+  });
+  document.getElementById('inspect-history').innerHTML = historyHtml;
+
+  // Actions (depend on mode and status)
+  let actionsHtml = '';
+  if (a.status === 'running') {
+    actionsHtml += `<button class="btn-action warn" onclick="alert('Agent 将在当前迭代完成后暂停')">⏸ 暂停 Agent</button>`;
+    if (a.mode === 'cloud') {
+      actionsHtml += `<button class="btn-action" onclick="requestVerboseLogs()">🔍 请求详细日志</button>`;
+    } else {
+      actionsHtml += `<button class="btn-action primary" onclick="alert('启动 Claude Code attach 到会话 ${a.id}')">💻 进入终端会话</button>`;
+    }
+    actionsHtml += `<button class="btn-action danger" onclick="alert('确定终止 Agent ${a.id}？')">⏹ 终止任务</button>`;
+  } else if (a.status === 'blocked') {
+    actionsHtml += `<button class="btn-action primary" onclick="openDecisionDrawer('esc-1')">📋 查看升级事件</button>`;
+    actionsHtml += `<button class="btn-action danger" onclick="alert('确定终止 Agent ${a.id}？')">⏹ 终止任务</button>`;
+  }
+  document.getElementById('inspect-actions').innerHTML = actionsHtml;
+
+  // ---- Agent Console ----
+  const msgs = a.messages || [];
+  let msgsHtml = '';
+  if (msgs.length === 0) {
+    msgsHtml = '<div class="console-empty">还没有消息记录。在下方输入指令与 Agent 沟通。</div>';
+  } else {
+    msgs.forEach(m => {
+      const side = m.from === 'human' ? 'human' : 'agent';
+      const statusLabel = m.status === 'acknowledged' ? '✓ 已确认' : '📤 待拉取';
+      const statusClass = m.status === 'acknowledged' ? 'acknowledged' : 'delivered';
+      msgsHtml += `<div class="console-msg ${side}">
+        <div>${m.text}</div>
+        <div class="msg-time">${m.time} · <span class="msg-status ${statusClass}">${statusLabel}</span></div>
+      </div>`;
+    });
+  }
+  document.getElementById('console-messages').innerHTML = msgsHtml;
+  // Scroll to bottom
+  setTimeout(() => {
+    const el = document.getElementById('console-messages');
+    if (el) el.scrollTop = el.scrollHeight;
+  }, 100);
+
+  // Quick actions
+  document.getElementById('console-quick').innerHTML = `
+    <button class="console-quick" onclick="fillConsoleInput('请解释当前方案的 trade-off')">💡 追问理由</button>
+    <button class="console-quick" onclick="fillConsoleInput('暂停当前方向，先')">↩ 调整方向</button>
+    <button class="console-quick" onclick="fillConsoleInput('跳过 lint 检查，继续')">⏭ 跳过约束</button>
+    <button class="console-quick" onclick="fillConsoleInput('把当前进度提交 git，commit message:')">💾 请求提交</button>
+    <button class="console-quick" onclick="fillConsoleInput('修改 DoD：')">📝 修改 DoD</button>
+  `;
+
+  // Store current agent key for sendConsoleMessage
+  document.getElementById('console-input').dataset.agentKey = agentKey;
+
+  showView('live-inspection');
+}
+
+// ---- Console functions ----
+function fillConsoleInput(text) {
+  const input = document.getElementById('console-input');
+  input.value = text;
+  input.focus();
+}
+
+function sendConsoleMessage() {
+  const input = document.getElementById('console-input');
+  const text = input.value.trim();
+  if (!text) return;
+
+  const agentKey = input.dataset.agentKey;
+  const a = agentLiveStates[agentKey];
+  if (!a) return;
+
+  // Add message to agent's message log
+  if (!a.messages) a.messages = [];
+  a.messages.push({ from: 'human', text: text, time: new Date().toLocaleTimeString('zh-CN', {hour:'2-digit',minute:'2-digit'}), status: 'delivered' });
+
+  // Rerender messages
+  const msgs = a.messages;
+  let msgsHtml = '';
+  msgs.forEach(m => {
+    const side = m.from === 'human' ? 'human' : 'agent';
+    const statusLabel = m.status === 'acknowledged' ? '✓ 已确认' : '📤 待拉取';
+    const statusClass = m.status === 'acknowledged' ? 'acknowledged' : 'delivered';
+    msgsHtml += `<div class="console-msg ${side}">
+      <div>${m.text}</div>
+      <div class="msg-time">${m.time} · <span class="msg-status ${statusClass}">${statusLabel}</span></div>
+    </div>`;
+  });
+  document.getElementById('console-messages').innerHTML = msgsHtml;
+  const el = document.getElementById('console-messages');
+  if (el) el.scrollTop = el.scrollHeight;
+
+  // Simulate agent acknowledgment after 2 seconds (only for demo)
+  setTimeout(() => {
+    a.messages[a.messages.length-1].status = 'acknowledged';
+    // Re-render
+    let msgsHtml2 = '';
+    a.messages.forEach(m => {
+      const side = m.from === 'human' ? 'human' : 'agent';
+      const statusLabel = m.status === 'acknowledged' ? '✓ 已确认' : '📤 待拉取';
+      const statusClass = m.status === 'acknowledged' ? 'acknowledged' : 'delivered';
+      msgsHtml2 += `<div class="console-msg ${side}">
+        <div>${m.text}</div>
+        <div class="msg-time">${m.time} · <span class="msg-status ${statusClass}">${statusLabel}</span></div>
+      </div>`;
+    });
+    document.getElementById('console-messages').innerHTML = msgsHtml2;
+    document.getElementById('console-sync-status').textContent = '消息同步: ✓ 已确认';
+    document.getElementById('console-sync-status').classList.add('synced');
+  }, 2000);
+
+  document.getElementById('console-sync-status').textContent = '消息同步: 📤 等待 Agent 拉取...';
+  document.getElementById('console-sync-status').classList.remove('synced');
+
+  input.value = '';
+}
+
+function requestVerboseLogs() {
+  document.getElementById('console-sync-status').textContent = '消息同步: 📤 已请求详细日志';
+  alert('已请求 Agent 在下一轮迭代中上报详细日志（verbose 模式）');
+}
+
+// ==========================================================================
+// Decision Drawer
+// ==========================================================================
+function openDecisionDrawer(escId) {
+  const esc = escalations[escId];
+  if (!esc) return;
+
+  let optionsHtml = '';
+  esc.options.forEach(opt => {
+    optionsHtml += `
+      <div class="option-card ${opt.recommended ? 'recommended' : ''}">
+        <h5>${opt.name}</h5>
+        <div class="pros-cons">
+          <div class="pros">${opt.pros.map(p => p).join('<br>')}</div>
+          <div class="cons">${opt.cons.map(c => c).join('<br>')}</div>
+        </div>
+      </div>`;
+  });
+
+  let impactTags = '';
+  esc.impact.constraints.forEach(c => {
+    impactTags += `<span class="impact-tag fail">⚠ ${c}</span>`;
+  });
+  esc.impact.services.forEach(s => {
+    impactTags += `<span class="impact-tag">📦 ${s}</span>`;
+  });
+
+  const html = `
+    <div class="drawer-header">
+      <div>
+        <span class="urgency-tag ${esc.urgency}">${esc.urgency === 'urgent' ? '🔴 紧急' : '🟡 一般'}</span>
+        <div class="drawer-title">${esc.title}</div>
+        <div class="drawer-subtitle">
+          ${esc.project} · ${esc.service} · ${esc.agent} · 等待 ${esc.waiting}
+        </div>
+      </div>
+      <button class="btn-close" onclick="closeDecisionDrawer()">✕</button>
+    </div>
+
+    <div class="drawer-body">
+      <div class="drawer-section">
+        <h4>📋 背景与上下文</h4>
+        <p>${esc.context.replace(/\n/g, '<br>')}</p>
+      </div>
+
+      <div class="drawer-section">
+        <h4>🔀 可选方案</h4>
+        ${optionsHtml}
+      </div>
+
+      <div class="drawer-section">
+        <h4>🤖 Agent 分析与建议</h4>
+        <div class="reasoning-block">${esc.reasoning}</div>
+      </div>
+
+      <div class="drawer-section">
+        <h4>💥 影响范围</h4>
+        <div class="impact-row">${impactTags}</div>
+        ${esc.impact.cost_estimate ? `<p style="margin-top:10px;font-size:12px;color:var(--text-muted)">📊 ${esc.impact.cost_estimate}</p>` : ''}
+      </div>
+    </div>
+
+    <div class="drawer-footer">
+      ${esc.options.map((opt, i) => `
+        <button class="btn-decision ${opt.recommended ? 'success' : ''}"
+                onclick="makeDecision('${escId}', '${opt.name}')">
+          ✓ ${opt.name}
+        </button>
+      `).join('')}
+      <button class="btn-decision ask" onclick="makeDecision('${escId}', 'ask_more')">
+        💬 需要更多信息
+      </button>
+    </div>
+  `;
+
+  document.getElementById('decisionDrawer').innerHTML = html;
+  document.getElementById('drawerOverlay').classList.add('open');
+  document.getElementById('decisionDrawer').classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+
+function closeDecisionDrawer() {
+  document.getElementById('drawerOverlay').classList.remove('open');
+  document.getElementById('decisionDrawer').classList.remove('open');
+  document.body.style.overflow = '';
+}
+
+function makeDecision(escId, choice) {
+  const esc = escalations[escId];
+
+  // Update the sidebar item
+  const item = document.getElementById('esc-item-' + escId.split('-')[1]);
+  if (item) {
+    item.classList.remove('urgent', 'normal');
+    item.classList.add('resolved');
+    item.querySelector('.esc-meta').innerHTML = `✅ 已决定 · ${choice} · 刚刚`;
+    item.querySelector('.esc-cta').textContent = '';
+    item.onclick = null;
+  }
+
+  // Update counts
+  updateEscalationCount();
+
+  // Close drawer
+  closeDecisionDrawer();
+
+  // Brief toast (would be a proper notification in production)
+  console.log(`Decision made: ${esc.project} — ${esc.title} → ${choice}`);
+}
+
+function updateEscalationCount() {
+  const pending = document.querySelectorAll('.escalation-item.urgent, .escalation-item.normal').length;
+  document.getElementById('escalationCount').textContent = pending;
+  document.getElementById('inboxBadge').textContent = pending + ' 待处理';
+  if (pending === 0) {
+    document.getElementById('inboxBadge').textContent = '已清空';
+    document.getElementById('inboxBadge').style.background = 'var(--green)';
+  }
+}
+
+// Close drawer with Escape key
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') closeDecisionDrawer();
+});
+
+// ==========================================================================
+// Project data & detail view
+// ==========================================================================
+const projects = {
+  'tracker-system': {
+    health: 'green', name: 'tracker-system', meta: 'TypeScript · 5 个服务 · 3 个 Agent',
+    topology: `
+      <div class="topology-layer"><span class="topology-label">前端</span>
+        <div class="service-node healthy"><div class="svc-name">📱 mobile-app</div><div class="svc-meta"><span>React Native</span><span>:5180</span></div><span class="svc-agent active">agent-1 运行中</span></div>
+        <div class="service-node healthy"><div class="svc-name">🌐 admin-web</div><div class="svc-meta"><span>Vite + React</span><span>:5173</span></div><span class="svc-agent active">agent-3 运行中</span></div>
+      </div>
+      <div style="text-align:center;color:var(--text-muted)">↓ API Gateway (nginx :8080) ↓</div>
+      <div class="topology-layer"><span class="topology-label">后端</span>
+        <div class="service-node healthy"><div class="svc-name">🔧 tracker-service</div><div class="svc-meta"><span>Express</span><span>:3001</span></div><span class="svc-agent active">agent-2 运行中</span></div>
+        <div class="service-node healthy"><div class="svc-name">🔧 tracker-admin</div><div class="svc-meta"><span>Express</span><span>:3002</span></div><span class="svc-agent idle">空闲</span></div>
+      </div>
+      <div style="text-align:center;color:var(--text-muted)">↓ ↓</div>
+      <div class="topology-layer"><span class="topology-label">数据层</span>
+        <div class="service-node healthy"><div class="svc-name">🗄 PostgreSQL 16</div><div class="svc-meta"><span>:5432</span></div></div>
+        <div class="service-node healthy"><div class="svc-name">📦 Redis 7</div><div class="svc-meta"><span>:6379</span></div></div>
+      </div>`,
+    constraints: [
+      { name: 'no_circular_deps', service: '全局', status: 'pass' },
+      { name: 'layer_dependency', service: '全局', status: 'pass' },
+      { name: 'no_new_deps_without_adr', service: '全局', status: 'pass' },
+      { name: 'api_backward_compat', service: 'tracker-service', status: 'pass' },
+      { name: 'no_raw_sql_in_app', service: '全局', status: 'pass' },
+      { name: 'no_console_in_prod', service: '全局', status: 'warn' },
+      { name: 'public_api_has_test', service: 'tracker-admin', status: 'warn' },
+    ],
+    timeline: [
+      { time: '2 分钟前', desc: '自检通过：全部约束合规', agent: 'agent-2 · tracker-service', type: 'done' },
+      { time: '8 分钟前', desc: '实现了用户认证中间件', agent: 'agent-2 · tracker-service', type: 'done' },
+      { time: '15 分钟前', desc: '正在运行约束检查...', agent: 'agent-1 · mobile-app', type: 'active' },
+      { time: '22 分钟前', desc: '开始任务：添加推送通知模块', agent: 'agent-3 · admin-web', type: 'done' },
+    ],
+    decisions: [
+      { id: 'D-20260607-001', topic: '选择 Repository 模式而非 TypeORM 直连', risk: '低风险', time: '今天' },
+      { id: 'D-20260605-002', topic: '移动端使用 React Native 新架构 (Fabric)', risk: '中风险', time: '2 天前' },
+    ]
+  },
+  'payment-gateway': {
+    health: 'yellow', name: 'payment-gateway', meta: 'Go · 4 个服务 · 2 个 Agent',
+    topology: `
+      <div class="topology-layer"><span class="topology-label">后端</span>
+        <div class="service-node healthy"><div class="svc-name">💳 gateway-api</div><div class="svc-meta"><span>Go/Chi</span><span>:8080</span></div><span class="svc-agent active">agent-1 运行中</span></div>
+        <div class="service-node warning"><div class="svc-name">📊 billing-worker</div><div class="svc-meta"><span>Go</span><span>background</span></div><span class="svc-agent active">agent-2 运行中</span></div>
+      </div>
+      <div style="text-align:center;color:var(--text-muted)">↓ ↓</div>
+      <div class="topology-layer"><span class="topology-label">数据层</span>
+        <div class="service-node healthy"><div class="svc-name">🗄 MySQL 8</div><div class="svc-meta"><span>:3306</span></div></div>
+        <div class="service-node healthy"><div class="svc-name">📦 Redis 7</div><div class="svc-meta"><span>:6379</span></div></div>
+      </div>`,
+    constraints: [
+      { name: 'no_circular_deps', service: '全局', status: 'pass' },
+      { name: 'layer_dependency', service: '全局', status: 'warn' },
+      { name: 'no_new_deps_without_adr', service: 'billing-worker', status: 'fail' },
+      { name: 'api_backward_compat', service: 'gateway-api', status: 'pass' },
+    ],
+    timeline: [
+      { time: '5 分钟前', desc: '约束警告：billing 层违规', agent: 'agent-2', type: 'error' },
+      { time: '15 分钟前', desc: '实现了 Stripe webhook 处理器', agent: 'agent-1', type: 'done' },
+      { time: '40 分钟前', desc: '自检失败：覆盖率 72% < 80%', agent: 'agent-2', type: 'error' },
+    ],
+    decisions: [
+      { id: 'D-20260606-003', topic: '选择 goroutine pool 而非无限制 spawn', risk: '中风险', time: '昨天' },
+      { id: 'D-20260604-001', topic: '支付幂等性使用 Redis 锁而非 DB 唯一约束', risk: '中风险', time: '3 天前' },
+    ]
+  },
+  'user-mobile': {
+    health: 'green', name: 'user-mobile', meta: 'React Native · 4 个服务 · 2 个 Agent',
+    topology: `
+      <div class="topology-layer"><span class="topology-label">前端</span>
+        <div class="service-node healthy"><div class="svc-name">🍎 iOS-app</div><div class="svc-meta"><span>React Native</span></div><span class="svc-agent active">agent-1 运行中</span></div>
+        <div class="service-node healthy"><div class="svc-name">🤖 Android-app</div><div class="svc-meta"><span>React Native</span></div><span class="svc-agent idle">空闲</span></div>
+      </div>
+      <div style="text-align:center;color:var(--text-muted)">↓</div>
+      <div class="topology-layer"><span class="topology-label">后端</span>
+        <div class="service-node healthy"><div class="svc-name">👤 user-api</div><div class="svc-meta"><span>Express</span><span>:3003</span></div><span class="svc-agent active">agent-2 运行中</span></div>
+      </div>
+      <div style="text-align:center;color:var(--text-muted)">↓</div>
+      <div class="topology-layer"><span class="topology-label">数据层</span>
+        <div class="service-node healthy"><div class="svc-name">🗄 PostgreSQL 16</div><div class="svc-meta"><span>:5432</span></div></div>
+      </div>`,
+    constraints: [
+      { name: 'no_circular_deps', service: '全局', status: 'pass' },
+      { name: 'layer_dependency', service: '全局', status: 'pass' },
+      { name: 'api_backward_compat', service: 'user-api', status: 'pass' },
+    ],
+    timeline: [
+      { time: '8 分钟前', desc: '自检通过：覆盖率 92%', agent: 'agent-1', type: 'done' },
+      { time: '20 分钟前', desc: '实现了生物识别认证页', agent: 'agent-1', type: 'done' },
+      { time: '35 分钟前', desc: '正在运行集成测试...', agent: 'agent-2', type: 'active' },
+    ],
+    decisions: [
+      { id: 'D-20260606-001', topic: '移动端状态管理选择 Zustand 而非 Redux', risk: '低风险', time: '昨天' },
+    ]
+  },
+  'data-pipeline': {
+    health: 'red', name: 'data-pipeline', meta: 'Python · 4 个服务 · 1 个 Agent 阻塞 · 1 个升级',
+    topology: `
+      <div class="topology-layer"><span class="topology-label">后端</span>
+        <div class="service-node healthy"><div class="svc-name">⚙️ etl-worker</div><div class="svc-meta"><span>Python/Airflow</span></div><span class="svc-agent idle">空闲</span></div>
+        <div class="service-node critical"><div class="svc-name">🌊 stream-processor</div><div class="svc-meta"><span>Python</span></div><span class="svc-agent blocked">agent-3 已阻塞</span></div>
+      </div>
+      <div style="text-align:center;color:var(--text-muted)">↓ ↓</div>
+      <div class="topology-layer"><span class="topology-label">数据层</span>
+        <div class="service-node healthy"><div class="svc-name">🗄 ClickHouse</div><div class="svc-meta"><span>:8123</span></div></div>
+        <div class="service-node critical"><div class="svc-name">❓ MQ 待定</div><div class="svc-meta"><span>等待决策</span></div></div>
+      </div>`,
+    constraints: [
+      { name: 'no_circular_deps', service: '全局', status: 'pass' },
+      { name: 'no_new_deps_without_adr', service: 'stream-processor', status: 'fail' },
+      { name: 'layer_dependency', service: '全局', status: 'warn' },
+    ],
+    timeline: [
+      { time: '2 小时 34 分钟前', desc: '升级事件：需要选择消息队列方案', agent: 'agent-3', type: 'error' },
+      { time: '3 小时前', desc: '约束失败：引入新依赖未记录 ADR', agent: 'agent-3', type: 'error' },
+      { time: '4 小时前', desc: '开始任务：实现实时流处理 pipeline', agent: 'agent-3', type: 'done' },
+    ],
+    decisions: [
+      { id: 'D-20260606-004', topic: 'ETL 调度选择 Airflow 而非 Prefect', risk: '中风险', time: '昨天' },
+    ]
+  }
+};
+
+function showProjectDetail(projectId) {
+  const p = projects[projectId];
+  if (!p) return;
+  document.getElementById('detail-health').className = 'card-health ' + p.health;
+  document.getElementById('detail-name').textContent = p.name;
+  document.getElementById('detail-meta').textContent = p.meta;
+  document.getElementById('detail-topology').innerHTML = p.topology;
+
+  let ch = '';
+  p.constraints.forEach(c => {
+    const sc = c.status === 'pass' ? 'pass' : c.status === 'fail' ? 'fail' : 'warn';
+    const si = c.status === 'pass' ? '✓' : c.status === 'fail' ? '✗' : '⚠';
+    ch += `<div class="constraint-row"><span class="constraint-name">${c.name}</span><span class="constraint-service">${c.service}</span><span class="constraint-status ${sc}">${si} ${c.status}</span></div>`;
+  });
+  document.getElementById('detail-constraints').innerHTML = ch;
+
+  let th = '';
+  p.timeline.forEach(t => {
+    th += `<div class="timeline-item ${t.type}"><div class="timeline-time">${t.time}</div><div class="timeline-desc">${t.desc}</div><div class="timeline-agent">${t.agent}</div></div>`;
+  });
+  document.getElementById('detail-timeline').innerHTML = th;
+
+  let dh = '';
+  p.decisions.forEach(d => {
+    dh += `<div class="decision-item"><div class="decision-id">${d.id}</div><div class="decision-topic">${d.topic}</div><div class="decision-meta">${d.risk} 风险 · ${d.time}</div></div>`;
+  });
+  document.getElementById('detail-decisions').innerHTML = dh;
+
+  // Make agent entries clickable — open Live Inspection
+  document.querySelectorAll('.svc-agent').forEach(el => {
+    el.style.cursor = 'pointer';
+    el.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const text = el.textContent.trim();
+      if (text.includes('agent-1')) openLiveInspection('agent-1-mobile');
+      else if (text.includes('agent-2')) openLiveInspection('agent-2-tracker');
+      else if (text.includes('agent-3')) {
+        if (text.includes('已阻塞') || text.includes('blocked')) openLiveInspection('agent-3-data');
+        else openLiveInspection('agent-2-tracker');
+      }
+    });
+  });
+  // Make timeline items clickable
+  document.querySelectorAll('.timeline-item').forEach((el, i) => {
+    el.style.cursor = 'pointer';
+    el.addEventListener('click', () => {
+      const agentText = el.querySelector('.timeline-agent')?.textContent || '';
+      if (agentText.includes('agent-1')) openLiveInspection('agent-1-mobile');
+      else if (agentText.includes('agent-2')) openLiveInspection('agent-2-tracker');
+      else if (agentText.includes('agent-3')) openLiveInspection('agent-3-data');
+    });
+  });
+
+  showView('project-detail');
+}
+</script>
+</body>
+</html>

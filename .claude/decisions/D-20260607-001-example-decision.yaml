@@ -1,0 +1,26 @@
+# 示例决策记录 — 展示实际填写效果
+# 可删除此文件，仅作参考
+
+id: "D-20260607-001"
+timestamp: "2026-06-07T15:00:00"
+topic: "选择 Repository 模式而非直接在 Service 中使用 ORM"
+context: |
+  订单模块需要在 PostgreSQL 和 Redis 之间协调数据访问。
+  当前项目已有 TypeORM，但直接使用会在 Service 层散落查询逻辑，
+  不利于测试和替换。
+chosen: "引入 Repository 抽象层，每个聚合根对应一个 Repository 接口"
+rejected:
+  - "直接在 Service 中使用 TypeORM: 会导致 Service 与 ORM 紧耦合，单元测试困难"
+  - "使用 CQRS 分离读写: 当前读写逻辑简单，CQRS 属于过度设计"
+rationale: |
+  Repository 模式在不引入新依赖的前提下实现数据访问解耦。
+  接口在 domain 层，实现在 infrastructure 层，符合依赖方向约束。
+constraints_ref:
+  - "constraints.yaml: no_new_deps_without_adr (没有引入新依赖)"
+  - "constraints.yaml: layer_dependency_direction (依赖方向合规)"
+impact:
+  files:
+    - "src/domain/order/order.repository.ts"
+    - "src/infrastructure/persistence/typeorm-order.repository.ts"
+    - "src/application/order/order.service.ts"
+  risk: "low"
