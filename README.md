@@ -17,7 +17,6 @@
 │   └── decisions/              # 决策记录模板 + 示例
 ├── docs/
 │   ├── control-tower-mockup.html  # 控制塔交互原型
-│   └── article.md                 # 设计思路分享文章
 └── README.md
 ```
 
