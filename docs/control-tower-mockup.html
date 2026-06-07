@@ -379,6 +379,182 @@ body {
 .detail-title { font-size: 18px; font-weight: 600; }
 .detail-subtitle { font-size: 13px; color: var(--text-secondary); margin-left: 4px; }
 
+.detail-description {
+  background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: var(--radius-lg); padding: 20px; margin-bottom: 20px;
+  display: flex; gap: 16px; align-items: flex-start;
+}
+.detail-description .desc-icon { font-size: 28px; flex-shrink: 0; margin-top: 2px; }
+.detail-description .desc-content { flex: 1; }
+.detail-description .desc-label {
+  font-size: 10px; text-transform: uppercase; letter-spacing: 0.8px;
+  color: var(--text-muted); font-weight: 600; margin-bottom: 8px;
+}
+.detail-description .desc-text {
+  font-size: 13px; line-height: 1.7; color: var(--text-secondary);
+}
+.detail-description .desc-text strong { color: var(--text-primary); }
+.detail-description .desc-tags {
+  display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap;
+}
+.detail-description .desc-tag {
+  font-size: 10px; padding: 2px 8px; border-radius: 4px;
+  background: var(--bg-primary); border: 1px solid var(--border); color: var(--text-muted);
+}
+
+/* ==========================================================================
+   ITERATION TASK BOARD — compact table for multi-service parallel iterations
+   ========================================================================== */
+.iter-board {
+  background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: var(--radius-lg); padding: 0; margin-bottom: 20px;
+  overflow: hidden;
+}
+.iter-board-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 16px 20px; border-bottom: 1px solid var(--border);
+}
+.iter-board-header h3 {
+  font-size: 13px; font-weight: 600; text-transform: uppercase;
+  letter-spacing: 0.5px; color: var(--text-secondary);
+  display: flex; align-items: center; gap: 8px;
+}
+.iter-board-header .iter-count {
+  font-size: 10px; padding: 1px 8px; border-radius: 10px; font-weight: 600;
+  background: var(--blue-bg); color: var(--blue);
+}
+.iter-board-header .iter-count.warn {
+  background: var(--yellow-bg); color: var(--yellow);
+}
+
+/* Concurrency warning banner */
+.concurrency-warn {
+  margin: 0 20px 14px 20px; padding: 12px 16px;
+  background: var(--yellow-bg); border: 1px solid rgba(210,153,34,0.3);
+  border-radius: var(--radius); display: flex; gap: 10px; align-items: flex-start;
+}
+.concurrency-warn .cw-icon { font-size: 18px; flex-shrink: 0; margin-top: 1px; }
+.concurrency-warn .cw-text {
+  font-size: 12px; line-height: 1.6; color: var(--yellow);
+}
+.concurrency-warn .cw-text strong { color: #e2a82e; }
+
+/* The table */
+.iter-table { width: 100%; border-collapse: collapse; }
+.iter-table th {
+  text-align: left; font-size: 10px; text-transform: uppercase;
+  letter-spacing: 0.5px; color: var(--text-muted); font-weight: 600;
+  padding: 10px 20px; background: var(--bg-hover);
+  border-bottom: 1px solid var(--border);
+}
+.iter-table td {
+  padding: 12px 20px; font-size: 12px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+}
+.iter-table tbody tr.iter-row {
+  cursor: pointer; transition: background 0.1s;
+}
+.iter-table tbody tr.iter-row:hover { background: var(--bg-hover); }
+.iter-table tbody tr.iter-row.expanded { background: var(--bg-hover); }
+
+/* Column widths */
+.iter-table .col-id      { width: 70px; }
+.iter-table .col-goal    { width: auto; }
+.iter-table .col-action  { width: 160px; }
+.iter-table .col-agent   { width: 85px; }
+.iter-table .col-prog    { width: 70px; text-align: right; }
+.iter-table .col-expand  { width: 30px; text-align: center; }
+
+/* Current action cell */
+.action-cell {
+  font-size: 11px; color: var(--text-secondary); line-height: 1.4;
+  display: flex; align-items: center; gap: 4px;
+}
+.action-cell .action-dot {
+  width: 5px; height: 5px; border-radius: 50%; flex-shrink: 0;
+  background: var(--blue); animation: pulse 1.5s infinite;
+}
+.action-cell .action-dot.blocked { background: var(--red); }
+
+/* Task ID cell */
+.task-id-cell { font-family: var(--font-mono); font-size: 11px; color: var(--blue); }
+
+/* Goal cell */
+.goal-cell-title { font-weight: 600; color: var(--text-primary); }
+
+/* Service tags (used in detail block) */
+.svc-tags { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 10px; }
+.svc-tag-detail {
+  font-size: 10px; padding: 2px 8px; border-radius: 4px;
+  background: var(--bg-hover); color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+/* Agent badge in table */
+.agent-badge-cell {
+  font-size: 10px; padding: 2px 8px; border-radius: 4px;
+  font-family: var(--font-mono); white-space: nowrap;
+}
+.agent-badge-cell.a1 { background: var(--blue-bg); color: var(--blue); }
+.agent-badge-cell.a2 { background: var(--purple-bg); color: var(--purple); }
+.agent-badge-cell.a3 { background: var(--green-bg); color: var(--green); }
+
+/* Progress bar */
+.prog-cell { display: flex; align-items: center; gap: 6px; justify-content: flex-end; }
+.prog-bar-mini {
+  width: 36px; height: 3px; background: var(--bg-primary);
+  border-radius: 2px; overflow: hidden; flex-shrink: 0;
+}
+.prog-bar-mini .fill { height: 100%; border-radius: 2px; background: var(--green); }
+.prog-bar-mini .fill.warn { background: var(--yellow); }
+.prog-bar-mini .fill.danger { background: var(--red); }
+.prog-frac { font-size: 10px; color: var(--text-muted); font-family: var(--font-mono); }
+
+/* Expand indicator */
+.expand-icon { font-size: 11px; color: var(--text-muted); transition: transform 0.2s; display: inline-block; }
+tr.expanded .expand-icon { transform: rotate(90deg); }
+
+/* Expanded detail row */
+tr.detail-row { display: none; }
+tr.detail-row.open { display: table-row; }
+tr.detail-row td {
+  padding: 0 20px 14px 20px; background: var(--bg-primary);
+  border-bottom: 1px solid var(--border);
+}
+.detail-block {
+  border-left: 2px solid var(--blue); padding-left: 14px;
+}
+.detail-block .detail-goal {
+  font-size: 12px; line-height: 1.6; color: var(--text-secondary);
+  margin-bottom: 10px;
+}
+.detail-block .detail-goal::before {
+  content: '🎯 目标：'; font-size: 10px; color: var(--text-muted);
+  font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;
+}
+.detail-block .detail-meta {
+  font-size: 10px; color: var(--text-muted); margin-bottom: 10px;
+}
+/* Task list inside detail */
+.detail-tasks { display: flex; flex-direction: column; gap: 3px; }
+.detail-task {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 11px; padding: 3px 0;
+}
+.detail-task .dt-status { width: 14px; text-align: center; flex-shrink: 0; font-size: 11px; }
+.detail-task .dt-status.done { color: var(--green); }
+.detail-task .dt-status.in-progress { color: var(--blue); animation: pulse 1.5s infinite; }
+.detail-task .dt-status.pending { color: var(--text-muted); }
+.detail-task .dt-status.blocked { color: var(--red); }
+.detail-task .dt-name { color: var(--text-primary); }
+.detail-task.done .dt-name { color: var(--text-muted); text-decoration: line-through; }
+.detail-task .dt-svc {
+  font-size: 9px; padding: 1px 5px; border-radius: 3px;
+  background: var(--bg-hover); color: var(--text-muted);
+  font-family: var(--font-mono); white-space: nowrap; margin-left: auto;
+}
+
 .detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px; }
 
 .panel {
@@ -651,6 +827,90 @@ body {
 .console-quick:hover { background: var(--bg-hover); color: var(--text-primary); border-color: var(--blue); }
 
 /* ==========================================================================
+   HISTORY MODAL
+   ========================================================================== */
+.history-overlay {
+  position: fixed; inset: 0; background: var(--bg-overlay);
+  z-index: 300; opacity: 0; visibility: hidden;
+  transition: opacity 0.2s, visibility 0.2s;
+  display: flex; align-items: center; justify-content: center;
+}
+.history-overlay.open { opacity: 1; visibility: visible; }
+
+.history-modal {
+  background: var(--bg-secondary); border: 1px solid var(--border);
+  border-radius: var(--radius-lg); width: 680px; max-height: 80vh;
+  display: flex; flex-direction: column;
+  box-shadow: 0 16px 48px rgba(0,0,0,0.6);
+  transform: translateY(12px); transition: transform 0.25s cubic-bezier(0.16,1,0.3,1);
+}
+.history-overlay.open .history-modal { transform: translateY(0); }
+
+.history-modal .h-modal-header {
+  padding: 18px 24px; border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: space-between;
+  flex-shrink: 0;
+}
+.history-modal .h-modal-header h3 {
+  font-size: 14px; font-weight: 600; display: flex; align-items: center; gap: 8px;
+}
+.history-modal .h-modal-body {
+  flex: 1; overflow-y: auto; padding: 16px 24px;
+  display: flex; flex-direction: column; gap: 10px;
+  min-height: 200px; max-height: 52vh;
+}
+.history-modal .h-modal-footer {
+  padding: 12px 24px; border-top: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: space-between;
+  flex-shrink: 0;
+}
+
+/* History item */
+.history-item {
+  background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 14px 16px;
+}
+.history-item .hi-head {
+  display: flex; align-items: center; gap: 10px; margin-bottom: 8px;
+}
+.history-item .hi-id {
+  font-family: var(--font-mono); font-size: 11px; color: var(--blue);
+}
+.history-item .hi-agent {
+  font-size: 10px; padding: 1px 8px; border-radius: 4px;
+  font-family: var(--font-mono);
+  background: var(--bg-hover); color: var(--text-muted);
+}
+.history-item .hi-date {
+  font-size: 10px; color: var(--text-muted); margin-left: auto;
+}
+.history-item .hi-goal {
+  font-size: 12px; line-height: 1.6; color: var(--text-secondary);
+  margin-bottom: 8px;
+}
+.history-item .hi-meta {
+  font-size: 10px; color: var(--text-muted);
+  display: flex; gap: 14px; align-items: center;
+}
+.history-item .hi-svc-tag {
+  font-size: 9px; padding: 1px 6px; border-radius: 3px;
+  background: var(--bg-hover); color: var(--text-muted);
+}
+
+/* Pagination */
+.h-pager { display: flex; align-items: center; gap: 10px; font-size: 12px; color: var(--text-secondary); }
+.h-pager button {
+  background: transparent; border: 1px solid var(--border); color: var(--text-secondary);
+  padding: 4px 12px; border-radius: 5px; font-size: 11px; cursor: pointer;
+  transition: all 0.15s;
+}
+.h-pager button:hover { background: var(--bg-hover); color: var(--text-primary); border-color: var(--blue); }
+.h-pager button:disabled { opacity: 0.35; pointer-events: none; }
+.h-pager .page-info { font-family: var(--font-mono); }
+
+.history-empty { text-align: center; color: var(--text-muted); font-size: 12px; padding: 30px 0; }
+
+/* ==========================================================================
    HIDDEN / TOGGLE
    ========================================================================== */
 .hidden { display: none !important; }
@@ -849,6 +1109,35 @@ body {
         <span class="detail-title" id="detail-name"></span>
         <span class="detail-subtitle" id="detail-meta"></span>
       </div>
+      <div class="detail-description hidden" id="detail-description">
+        <div class="desc-icon">📖</div>
+        <div class="desc-content">
+          <div class="desc-label">项目描述</div>
+          <div class="desc-text" id="detail-desc-text"></div>
+          <div class="desc-tags" id="detail-desc-tags"></div>
+        </div>
+      </div>
+      <div class="iter-board hidden" id="detail-iter-board">
+        <div class="iter-board-header">
+          <h3>🎯 进行中的迭代 <span class="iter-count" id="detail-iter-count"></span></h3>
+          <button class="btn-back" style="font-size:11px;padding:3px 10px" onclick="openHistoryModal();event.stopPropagation()">📜 查看历史</button>
+        </div>
+        <div class="concurrency-warn hidden" id="concurrency-warn">
+          <span class="cw-icon">⚠️</span>
+          <span class="cw-text" id="concurrency-warn-text"></span>
+        </div>
+        <table class="iter-table">
+          <thead><tr>
+            <th class="col-id">任务ID</th>
+            <th class="col-goal">任务目标</th>
+            <th class="col-action">当下在做</th>
+            <th class="col-agent">Agent</th>
+            <th class="col-prog">进度</th>
+            <th class="col-expand"></th>
+          </tr></thead>
+          <tbody id="detail-iter-tbody"></tbody>
+        </table>
+      </div>
       <div class="detail-grid">
         <div class="panel">
           <h3>🕸 服务拓扑</h3>
@@ -991,6 +1280,23 @@ body {
 <!-- ======================================================================
      DECISION DRAWER (slides from right)
      ====================================================================== -->
+<!-- ======================================================================
+     HISTORY MODAL — paginated historical iterations
+     ====================================================================== -->
+<div class="history-overlay" id="historyOverlay" onclick="closeHistoryModal()">
+  <div class="history-modal" onclick="event.stopPropagation()">
+    <div class="h-modal-header">
+      <h3>📜 历史迭代 — <span id="history-project-name" style="color:var(--blue)"></span></h3>
+      <button class="btn-close" onclick="closeHistoryModal()">✕</button>
+    </div>
+    <div class="h-modal-body" id="history-modal-body"></div>
+    <div class="h-modal-footer">
+      <span class="h-pager" id="history-pager"></span>
+      <button class="btn-close" onclick="closeHistoryModal()" style="font-size:12px;padding:6px 16px;width:auto">关闭</button>
+    </div>
+  </div>
+</div>
+
 <div class="drawer-overlay" id="drawerOverlay" onclick="closeDecisionDrawer()"></div>
 <div class="drawer" id="decisionDrawer">
   <!-- dynamically filled by openDecisionDrawer() -->
@@ -1525,6 +1831,103 @@ document.addEventListener('keydown', function(e) {
 const projects = {
   'tracker-system': {
     health: 'green', name: 'tracker-system', meta: 'TypeScript · 5 个服务 · 3 个 Agent',
+    description: '全栈资产追踪系统，支持 Web 管理后台与移动端扫码录入。采用 <strong>Express + React Native + PostgreSQL</strong> 技术栈，三个 Agent 并行开发前后端服务。当前处于实现阶段第 4/7 轮，已覆盖核心 CRUD 与认证流程。',
+    descTags: ['Express', 'React Native', 'PostgreSQL', 'Redis'],
+    history: [
+      {
+        id: 'T-TS-010', goal: '搭建项目骨架，配置 DoD、约束检查与 CI 流水线，初始化前后端服务与数据库。',
+        agent: 'agent-2', services: ['tracker-service', 'admin-web', 'postgres'],
+        completed: '3 天前', tasksDone: 6, cost: '128k',
+      },
+      {
+        id: 'T-TS-011', goal: '实现核心 CRUD 与数据模型：资产登记、分类、查询 API，前端管理表格与筛选。',
+        agent: 'agent-2', services: ['tracker-service', 'admin-web', 'postgres'],
+        completed: '2 天前', tasksDone: 8, cost: '210k',
+      },
+      {
+        id: 'T-TS-012', goal: '重构错误处理逻辑，统一 API 错误格式，添加全局异常过滤器与前端 toast 提示。',
+        agent: 'agent-2', services: ['tracker-service', 'admin-web', 'mobile-app'],
+        completed: '1 天前', tasksDone: 5, cost: '95k',
+      },
+      {
+        id: 'T-TS-013', goal: '移动端项目初始化，搭建 React Native 骨架、导航框架与 API 客户端层。',
+        agent: 'agent-1', services: ['mobile-app', 'user-api'],
+        completed: '1 天前', tasksDone: 5, cost: '112k',
+      },
+      {
+        id: 'T-TS-014', goal: '管理后台推送通知基础设施：WebSocket 连接管理、通知队列与模板引擎。',
+        agent: 'agent-3', services: ['admin-web', 'tracker-service', 'redis'],
+        completed: '12 小时前', tasksDone: 7, cost: '156k',
+      },
+    ],
+    iterations: [
+      {
+        id: 'T-TS-001',
+        goal: '实现用户认证与授权中间件，包括 JWT 签发/验证、session 管理、角色权限控制，并通过全部约束检查达到可部署状态。',
+        currentAction: '正在编写认证中间件集成测试',
+        agent: 'agent-2', agentClass: 'a2',
+        services: ['tracker-service', 'admin-web'],
+        meta: '已消耗 45k Token · 约束全部通过',
+        tasks: [
+          { name: 'JWT 签发与验证逻辑', service: 'tracker-service', status: 'done' },
+          { name: '认证中间件集成测试', service: 'tracker-service', status: 'in-progress' },
+          { name: '管理后台登录页适配', service: 'admin-web', status: 'pending' },
+          { name: '覆盖率提升至 85%', service: 'tracker-service', status: 'pending' },
+        ],
+      },
+      {
+        id: 'T-TS-002',
+        goal: '移动端扫码录入页面与生物识别认证集成，保持覆盖率 90% 以上。',
+        currentAction: '正在适配 Android 扫码页面布局',
+        agent: 'agent-1', agentClass: 'a1',
+        services: ['mobile-app', 'user-api'],
+        meta: '已消耗 38k Token · 覆盖率 92%',
+        tasks: [
+          { name: 'iOS 扫码录入页面', service: 'mobile-app', status: 'done' },
+          { name: '生物识别凭证校验 API', service: 'user-api', status: 'done' },
+          { name: 'Android 扫码适配', service: 'mobile-app', status: 'in-progress' },
+        ],
+      },
+      {
+        id: 'T-TS-003',
+        goal: '为管理后台添加推送通知模块，包括模板管理和批量推送功能。',
+        currentAction: '正在实现推送消息队列接口',
+        agent: 'agent-3', agentClass: 'a3',
+        services: ['admin-web', 'tracker-service'],
+        meta: '已消耗 28k Token · lint 警告 1 个',
+        tasks: [
+          { name: '通知模板管理页面', service: 'admin-web', status: 'done' },
+          { name: '推送消息队列接口', service: 'tracker-service', status: 'in-progress' },
+          { name: '安全审计 (audit-ci)', service: 'admin-web', status: 'pending' },
+        ],
+      },
+      {
+        id: 'T-TS-004',
+        goal: '为 PostgreSQL 数据库添加读写分离与连接池优化，降低 tracker-service 查询延迟。',
+        currentAction: '正在配置 PgBouncer 连接池参数',
+        agent: 'agent-2', agentClass: 'a2',
+        services: ['postgres', 'tracker-service'],
+        meta: '已消耗 18k Token · 刚刚启动',
+        tasks: [
+          { name: 'PgBouncer 部署与配置', service: 'postgres', status: 'in-progress' },
+          { name: 'tracker-service 读写分离适配', service: 'tracker-service', status: 'pending' },
+          { name: '连接池性能压测', service: 'postgres', status: 'pending' },
+        ],
+      },
+      {
+        id: 'T-TS-005',
+        goal: '实现 Redis 缓存层：为高频查询 API 添加缓存策略，减少 PostgreSQL 读压力。',
+        currentAction: '正在设计缓存键命名规范',
+        agent: 'agent-3', agentClass: 'a3',
+        services: ['redis', 'tracker-service'],
+        meta: '已消耗 12k Token · 刚刚启动',
+        tasks: [
+          { name: '缓存键设计与命名规范', service: 'redis', status: 'in-progress' },
+          { name: 'tracker-service 缓存中间件', service: 'tracker-service', status: 'pending' },
+          { name: '缓存失效策略与测试', service: 'redis', status: 'pending' },
+        ],
+      },
+    ],
     topology: `
       <div class="topology-layer"><span class="topology-label">前端</span>
         <div class="service-node healthy"><div class="svc-name">📱 mobile-app</div><div class="svc-meta"><span>React Native</span><span>:5180</span></div><span class="svc-agent active">agent-1 运行中</span></div>
@@ -1562,6 +1965,53 @@ const projects = {
   },
   'payment-gateway': {
     health: 'yellow', name: 'payment-gateway', meta: 'Go · 4 个服务 · 2 个 Agent',
+    description: '支付网关服务，负责对接 <strong>Stripe</strong> 支付渠道、账单处理与交易幂等性保障。基于 <strong>Go/Chi</strong> 构建，搭配 MySQL + Redis 存储。当前 billing-worker 存在约束警告，覆盖率 76% 未达标。',
+    descTags: ['Go/Chi', 'MySQL', 'Redis', 'Stripe'],
+    history: [
+      {
+        id: 'T-PG-010', goal: '搭建支付网关骨架：Go/Chi 路由、MySQL  schema 设计与 Redis 缓存层。',
+        agent: 'agent-1', services: ['gateway-api', 'mysql', 'redis'],
+        completed: '3 天前', tasksDone: 6, cost: '145k',
+      },
+      {
+        id: 'T-PG-011', goal: '实现支付幂等性机制，使用 Redis 分布式锁防止重复扣款，编写并发测试。',
+        agent: 'agent-1', services: ['gateway-api', 'redis'],
+        completed: '昨天', tasksDone: 4, cost: '98k',
+      },
+      {
+        id: 'T-PG-012', goal: 'billing-worker 账单批处理：定时任务框架、账单聚合与 MySQL 写入优化。',
+        agent: 'agent-2', services: ['billing-worker', 'mysql'],
+        completed: '昨天', tasksDone: 5, cost: '132k',
+      },
+    ],
+    iterations: [
+      {
+        id: 'T-PG-001',
+        goal: '完成 Stripe 支付渠道对接，实现 webhook 处理器与支付幂等性 Redis 锁，并通过 API 向后兼容测试。',
+        currentAction: '正在编写 API 向后兼容性测试',
+        agent: 'agent-1', agentClass: 'a1', num: 3, total: 5,
+        services: ['gateway-api', 'billing-worker', 'redis'],
+        meta: '已消耗 85k Token · 约束全部通过',
+        tasks: [
+          { name: 'Stripe webhook 处理器', service: 'gateway-api', status: 'done' },
+          { name: '支付幂等性 Redis 锁', service: 'gateway-api', status: 'done' },
+          { name: 'API 向后兼容性测试', service: 'gateway-api', status: 'in-progress' },
+        ],
+      },
+      {
+        id: 'T-PG-002',
+        goal: '修复 billing-worker 层依赖违规，实现账单聚合批处理，将覆盖率从 76% 提升至 80%。',
+        currentAction: '等待人工决策：billing 层架构调整方案',
+        agent: 'agent-2', agentClass: 'a2', num: 4, total: 6,
+        services: ['billing-worker'],
+        meta: '已消耗 65k Token · ⚠ 1 个约束警告',
+        tasks: [
+          { name: '账单聚合批处理逻辑', service: 'billing-worker', status: 'done' },
+          { name: '修复 billing 层依赖违规', service: 'billing-worker', status: 'blocked' },
+          { name: '单元测试覆盖率至 80%', service: 'billing-worker', status: 'pending' },
+        ],
+      },
+    ],
     topology: `
       <div class="topology-layer"><span class="topology-label">后端</span>
         <div class="service-node healthy"><div class="svc-name">💳 gateway-api</div><div class="svc-meta"><span>Go/Chi</span><span>:8080</span></div><span class="svc-agent active">agent-1 运行中</span></div>
@@ -1590,6 +2040,56 @@ const projects = {
   },
   'user-mobile': {
     health: 'green', name: 'user-mobile', meta: 'React Native · 4 个服务 · 2 个 Agent',
+    description: '移动端用户应用，覆盖 <strong>iOS 与 Android</strong> 双平台。按平台独立实现导航层，共享业务逻辑与状态管理（<strong>Zustand</strong>）。集成生物识别认证、用户资料编辑等核心功能，覆盖率 92%。',
+    descTags: ['React Native', 'Express', 'PostgreSQL', 'Zustand'],
+    history: [
+      {
+        id: 'T-UM-010', goal: 'React Native 项目初始化，配置 Zustand 状态管理、API 客户端与导航框架。',
+        agent: 'agent-1', services: ['mobile-app', 'user-api'],
+        completed: '3 天前', tasksDone: 5, cost: '98k',
+      },
+      {
+        id: 'T-UM-011', goal: '用户注册与登录流程：手机号验证、OAuth 第三方登录、session 持久化。',
+        agent: 'agent-1', services: ['mobile-app', 'user-api', 'postgres'],
+        completed: '2 天前', tasksDone: 7, cost: '176k',
+      },
+      {
+        id: 'T-UM-012', goal: '用户微服务 API 基础 CRUD：用户资料、头像上传、搜索与分页接口。',
+        agent: 'agent-2', services: ['user-api', 'postgres'],
+        completed: '昨天', tasksDone: 4, cost: '85k',
+      },
+    ],
+    iterations: [
+      {
+        id: 'T-UM-001',
+        goal: '为 iOS 和 Android 实现平台独立导航（Tab Bar / Navigation Rail），共享业务逻辑层，集成生物识别认证与用户资料编辑。',
+        currentAction: '正在实现 iOS Tab Bar 导航动画',
+        agent: 'agent-1', agentClass: 'a1', num: 4, total: 7,
+        services: ['mobile-app', 'user-api'],
+        meta: '已消耗 44k Token · 覆盖率 92%',
+        tasks: [
+          { name: '生物识别认证页面', service: 'mobile-app', status: 'done' },
+          { name: '用户资料编辑页面', service: 'mobile-app', status: 'done' },
+          { name: 'iOS Tab Bar 导航组件', service: 'mobile-app', status: 'in-progress' },
+          { name: 'Android Navigation Rail', service: 'mobile-app', status: 'pending' },
+          { name: '导航共享业务逻辑层', service: 'mobile-app', status: 'pending' },
+          { name: '用户搜索与分页 API', service: 'user-api', status: 'in-progress' },
+        ],
+      },
+      {
+        id: 'T-UM-002',
+        goal: '用户微服务 API 扩展：生物识别凭证校验、用户搜索与分页，完成集成测试。',
+        currentAction: '正在编写用户搜索与分页接口',
+        agent: 'agent-2', agentClass: 'a2', num: 2, total: 4,
+        services: ['user-api'],
+        meta: '已消耗 35k Token · 约束全部通过',
+        tasks: [
+          { name: '生物识别凭证校验 API', service: 'user-api', status: 'done' },
+          { name: '用户搜索与分页接口', service: 'user-api', status: 'in-progress' },
+          { name: 'API 集成测试', service: 'user-api', status: 'pending' },
+        ],
+      },
+    ],
     topology: `
       <div class="topology-layer"><span class="topology-label">前端</span>
         <div class="service-node healthy"><div class="svc-name">🍎 iOS-app</div><div class="svc-meta"><span>React Native</span></div><span class="svc-agent active">agent-1 运行中</span></div>
@@ -1619,6 +2119,56 @@ const projects = {
   },
   'data-pipeline': {
     health: 'red', name: 'data-pipeline', meta: 'Python · 4 个服务 · 1 个 Agent 阻塞 · 1 个升级',
+    description: '实时数据处理管道，基于 <strong>Python/Airflow</strong> 进行 ETL 调度，搭配 <strong>ClickHouse</strong> 作为 OLAP 存储。stream-processor 服务因消息队列选型（Kafka vs Redis Streams）触发升级事件，Agent-3 当前处于阻塞状态等待人工决策。',
+    descTags: ['Python', 'Airflow', 'ClickHouse', 'Kafka/Redis Streams'],
+    history: [
+      {
+        id: 'T-DP-010', goal: '搭建数据管道骨架：Airflow 部署、ClickHouse 集群初始化与 Python ETL 框架。',
+        agent: 'agent-3', services: ['etl-worker', 'clickhouse'],
+        completed: '4 天前', tasksDone: 6, cost: '185k',
+      },
+      {
+        id: 'T-DP-011', goal: 'ETL 数据摄取：从多个数据源（API、CSV、DB dump）批量导入 ClickHouse，编写数据校验脚本。',
+        agent: 'agent-3', services: ['etl-worker', 'clickhouse'],
+        completed: '2 天前', tasksDone: 5, cost: '220k',
+      },
+      {
+        id: 'T-DP-012', goal: 'stream-processor 原型验证：基于 Redis Streams 实现最小可行流处理管道与延迟测试。',
+        agent: 'agent-3', services: ['stream-processor', 'redis', 'clickhouse'],
+        completed: '昨天', tasksDone: 4, cost: '168k',
+      },
+    ],
+    iterations: [
+      {
+        id: 'T-DP-001',
+        goal: '实现实时流处理管道：消息队列集成、流数据消费逻辑与 ClickHouse 入库。当前因 MQ 选型升级事件阻塞。',
+        currentAction: '等待人工决策：Kafka vs Redis Streams 选型',
+        agent: 'agent-3', agentClass: 'a3', num: 3, total: 6,
+        services: ['stream-processor', 'clickhouse', 'MQ 待定'],
+        meta: '已消耗 200k Token · 🔴 1 个升级事件阻塞',
+        tasks: [
+          { name: 'stream-processor 骨架搭建', service: 'stream-processor', status: 'done' },
+          { name: 'ClickHouse 表结构与迁移', service: 'clickhouse', status: 'done' },
+          { name: '消息队列选型 (Kafka vs Redis)', service: 'MQ 待定', status: 'blocked' },
+          { name: '流处理器核心消费逻辑', service: 'stream-processor', status: 'pending' },
+          { name: '端到端集成测试', service: 'stream-processor', status: 'pending' },
+        ],
+      },
+      {
+        id: 'T-DP-002',
+        goal: '实现 Airflow DAG ETL 调度、ClickHouse 批量写入与数据质量校验规则。',
+        currentAction: '正在编写数据质量校验规则',
+        agent: 'agent-3', agentClass: 'a3', num: 1, total: 4,
+        services: ['etl-worker', 'clickhouse'],
+        meta: '已消耗 58k Token · 等待 stream-processor 就绪',
+        tasks: [
+          { name: 'Airflow DAG 编排', service: 'etl-worker', status: 'done' },
+          { name: 'ClickHouse 批量写入', service: 'clickhouse', status: 'done' },
+          { name: '数据质量校验规则', service: 'etl-worker', status: 'in-progress' },
+          { name: 'DAG 集成测试', service: 'etl-worker', status: 'pending' },
+        ],
+      },
+    ],
     topology: `
       <div class="topology-layer"><span class="topology-label">后端</span>
         <div class="service-node healthy"><div class="svc-name">⚙️ etl-worker</div><div class="svc-meta"><span>Python/Airflow</span></div><span class="svc-agent idle">空闲</span></div>
@@ -1645,12 +2195,189 @@ const projects = {
   }
 };
 
+function toggleIterDetail(idx) {
+  const row = document.getElementById('iter-row-' + idx);
+  const detail = document.getElementById('detail-row-' + idx);
+  if (!row || !detail) return;
+  const isOpen = detail.classList.contains('open');
+  // Close all others first
+  document.querySelectorAll('.detail-row.open').forEach(r => r.classList.remove('open'));
+  document.querySelectorAll('.iter-row.expanded').forEach(r => r.classList.remove('expanded'));
+  if (!isOpen) {
+    detail.classList.add('open');
+    row.classList.add('expanded');
+  }
+}
+
+// ==========================================================================
+// History Modal — paginated historical iterations
+// ==========================================================================
+let historyState = { projectId: null, page: 0, perPage: 4 };
+
+function openHistoryModal() {
+  const p = projects[historyState.projectId];
+  if (!p || !p.history || p.history.length === 0) {
+    alert('该项目暂无历史迭代记录');
+    return;
+  }
+  historyState.page = 0;
+  document.getElementById('history-project-name').textContent = p.name;
+  renderHistoryPage();
+  document.getElementById('historyOverlay').classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+
+function closeHistoryModal() {
+  document.getElementById('historyOverlay').classList.remove('open');
+  document.body.style.overflow = '';
+}
+
+function renderHistoryPage() {
+  const p = projects[historyState.projectId];
+  const history = p.history || [];
+  const totalPages = Math.ceil(history.length / historyState.perPage);
+  const start = historyState.page * historyState.perPage;
+  const pageItems = history.slice(start, start + historyState.perPage);
+
+  let bodyHtml = '';
+  if (pageItems.length === 0) {
+    bodyHtml = '<div class="history-empty">该页无记录</div>';
+  } else {
+    pageItems.forEach(h => {
+      const svcTags = (h.services || []).map(s => `<span class="hi-svc-tag">${s}</span>`).join(' ');
+      bodyHtml += `<div class="history-item">
+        <div class="hi-head">
+          <span class="hi-id">${h.id}</span>
+          <span class="hi-agent">${h.agent}</span>
+          <span class="hi-date">✅ ${h.completed}</span>
+        </div>
+        <div class="hi-goal">${h.goal}</div>
+        <div class="hi-meta">
+          <span>📋 ${h.tasksDone} 个子任务</span><span>⏣ ${h.cost}</span>
+          <span>${svcTags}</span>
+        </div>
+      </div>`;
+    });
+  }
+  document.getElementById('history-modal-body').innerHTML = bodyHtml;
+
+  // Pager
+  document.getElementById('history-pager').innerHTML = `
+    <button onclick="historyState.page=0;renderHistoryPage()" ${historyState.page===0?'disabled':''}>« 首页</button>
+    <button onclick="historyState.page=Math.max(0,historyState.page-1);renderHistoryPage()" ${historyState.page===0?'disabled':''}>‹ 上一页</button>
+    <span class="page-info">${historyState.page+1} / ${totalPages}</span>
+    <button onclick="historyState.page=Math.min(totalPages-1,historyState.page+1);renderHistoryPage()" ${historyState.page>=totalPages-1?'disabled':''}>下一页 ›</button>
+    <button onclick="historyState.page=totalPages-1;renderHistoryPage()" ${historyState.page>=totalPages-1?'disabled':''}>末页 »</button>
+  `;
+}
+
+// Close history modal with Escape
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape' && document.getElementById('historyOverlay').classList.contains('open')) {
+    closeHistoryModal();
+  }
+});
+
 function showProjectDetail(projectId) {
+  // Store for history modal
+  historyState.projectId = projectId;
   const p = projects[projectId];
   if (!p) return;
   document.getElementById('detail-health').className = 'card-health ' + p.health;
   document.getElementById('detail-name').textContent = p.name;
   document.getElementById('detail-meta').textContent = p.meta;
+
+  // Render project description
+  const descEl = document.getElementById('detail-description');
+  if (p.description) {
+    descEl.classList.remove('hidden');
+    document.getElementById('detail-desc-text').innerHTML = p.description;
+    const tagsEl = document.getElementById('detail-desc-tags');
+    tagsEl.innerHTML = (p.descTags || []).map(t => `<span class="desc-tag">${t}</span>`).join('');
+  } else {
+    descEl.classList.add('hidden');
+  }
+
+  // Render iteration task board — task-centric table with expandable rows
+  const iterEl = document.getElementById('detail-iter-board');
+  const iterations = p.iterations;
+  if (iterations && iterations.length > 0) {
+    iterEl.classList.remove('hidden');
+    const iterCount = iterations.length;
+    const countEl = document.getElementById('detail-iter-count');
+    countEl.textContent = `${iterCount} 个任务`;
+    countEl.classList.toggle('warn', iterCount > 4);
+
+    // Concurrency warning
+    const warnEl = document.getElementById('concurrency-warn');
+    if (iterCount > 4) {
+      warnEl.classList.remove('hidden');
+      document.getElementById('concurrency-warn-text').innerHTML =
+        `<strong>并行任务过多（${iterCount} 个 > 建议上限 4 个）</strong>，代码冲突与 Agent 上下文切换风险显著升高。建议等待部分任务完成后，再启动新迭代。`;
+    } else {
+      warnEl.classList.add('hidden');
+    }
+
+    // Show/hide history button
+    const histBtn = document.querySelector('#detail-iter-board .btn-back');
+    if (histBtn) histBtn.style.display = (p.history && p.history.length > 0) ? '' : 'none';
+
+    const SI = { 'done': '✓', 'in-progress': '◉', 'pending': '○', 'blocked': '⏸' };
+    let rowsHtml = '';
+    iterations.forEach((iter, idx) => {
+      const tasks = iter.tasks || [];
+      const doneCount = tasks.filter(t => t.status === 'done').length;
+      const totalCount = tasks.length;
+      const frac = totalCount > 0 ? `${doneCount}/${totalCount}` : '—';
+      let fillClass = '';
+      if (totalCount > 0) {
+        if (tasks.some(t => t.status === 'blocked')) fillClass = 'danger';
+        else if (doneCount / totalCount < 0.5) fillClass = 'warn';
+      }
+      const pctWidth = totalCount > 0 ? (doneCount / totalCount * 100) : 0;
+      const goalSummary = iter.goal.length > 45 ? iter.goal.slice(0, 45) + '...' : iter.goal;
+
+      // Determine if blocked for action dot styling
+      const isBlocked = tasks.some(t => t.status === 'blocked');
+      const actionDotClass = isBlocked ? 'blocked' : '';
+      const actionText = iter.currentAction || '—';
+
+      // Main row
+      rowsHtml += `<tr class="iter-row" id="iter-row-${idx}" onclick="toggleIterDetail(${idx})">
+        <td class="col-id"><span class="task-id-cell">${iter.id || '—'}</span></td>
+        <td class="col-goal"><span class="goal-cell-title" title="${iter.goal.replace(/"/g, '&quot;')}">${goalSummary}</span></td>
+        <td class="col-action"><span class="action-cell"><span class="action-dot ${actionDotClass}"></span>${actionText}</span></td>
+        <td class="col-agent"><span class="agent-badge-cell ${iter.agentClass || ''}">${iter.agent}</span></td>
+        <td class="col-prog"><span class="prog-cell"><span class="prog-bar-mini"><span class="fill ${fillClass}" style="width:${pctWidth}%"></span></span><span class="prog-frac">${frac}</span></span></td>
+        <td class="col-expand"><span class="expand-icon">▶</span></td>
+      </tr>`;
+
+      // Service tags for detail
+      const svcTags = (iter.services || []).map(s => `<span class="svc-tag-detail">${s}</span>`).join('');
+
+      // Detail row
+      let tasksHtml = '';
+      tasks.forEach(t => {
+        tasksHtml += `<div class="detail-task ${t.status}">
+          <span class="dt-status ${t.status}">${SI[t.status] || '○'}</span>
+          <span class="dt-name">${t.name}</span>
+          <span class="dt-svc">${t.service || ''}</span>
+        </div>`;
+      });
+      rowsHtml += `<tr class="detail-row" id="detail-row-${idx}"><td colspan="6">
+        <div class="detail-block">
+          <div class="detail-goal">${iter.goal}</div>
+          <div class="svc-tags">${svcTags}</div>
+          <div class="detail-meta">⏣ ${iter.meta}</div>
+          <div class="detail-tasks">${tasksHtml}</div>
+        </div>
+      </td></tr>`;
+    });
+    document.getElementById('detail-iter-tbody').innerHTML = rowsHtml;
+  } else {
+    iterEl.classList.add('hidden');
+  }
+
   document.getElementById('detail-topology').innerHTML = p.topology;
 
   let ch = '';
