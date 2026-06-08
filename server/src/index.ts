@@ -1,5 +1,6 @@
 import express from 'express';
 import cors from 'cors';
+import path from 'path';
 import http from 'http';
 import { MemoryStore } from './db/memory.store';
 import { createRouter } from './routes';
@@ -16,18 +17,31 @@ app.use(express.json());
 const store = new MemoryStore();
 seed(store);
 
-// Routes
+// API routes
 app.use(createRouter(store));
+
+// Serve static frontend from docs/
+const docsPath = path.resolve(__dirname, '../../docs');
+app.use(express.static(docsPath));
+
+// Root → control tower
+app.get('/', (_req, res) => {
+  res.sendFile(path.join(docsPath, 'control-tower-mockup.html'));
+});
+
+// Product lens
+app.get('/lens', (_req, res) => {
+  res.sendFile(path.join(docsPath, 'product-lens-mockup.html'));
+});
 
 // WebSocket
 wsHub.init(server);
 
 const PORT = parseInt(process.env.PORT || '3001', 10);
 server.listen(PORT, () => {
-  console.log(`\n🔭 Control Tower API running on http://localhost:${PORT}`);
-  console.log(`   WebSocket: ws://localhost:${PORT}/ws`);
-  console.log(`   Projects: ${store.listProjects().length}`);
-  console.log(`   Agents: ${store.listAgents('tracker-system').length + store.listAgents('payment-gateway').length + store.listAgents('user-mobile').length + store.listAgents('data-pipeline').length}`);
-  console.log(`   Active iterations: ${store.getActiveIterations('tracker-system').length + store.getActiveIterations('payment-gateway').length + store.getActiveIterations('user-mobile').length + store.getActiveIterations('data-pipeline').length}`);
-  console.log(`   Connected WS clients: ${wsHub.getConnectedCount()}\n`);
+  console.log(`\n🔭 Control Tower  http://localhost:${PORT}/`);
+  console.log(`🔮 Product Lens    http://localhost:${PORT}/lens`);
+  console.log(`📡 API             http://localhost:${PORT}/api/projects`);
+  console.log(`📡 WebSocket       ws://localhost:${PORT}/ws`);
+  console.log(`   Projects: ${store.listProjects().length} | Agents: 8 | Iterations: 11\n`);
 });
