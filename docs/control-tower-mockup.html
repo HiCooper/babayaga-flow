@@ -1005,10 +1005,10 @@ tr.detail-row td {
 <header class="topbar">
   <div class="topbar-left">
     <div class="logo">🔭 <span>控制塔</span></div>
-    <div class="global-stat"><span class="dot green"></span> <strong>4</strong> 个项目</div>
-    <div class="global-stat"><span class="dot blue"></span> <strong>8</strong> 个 Agent 运行中</div>
+    <div class="global-stat"><span class="dot green"></span> <strong id="totalProjects">—</strong> 个项目</div>
+    <div class="global-stat"><span class="dot blue"></span> <strong id="totalAgents">—</strong> 个 Agent 运行中</div>
     <div class="global-stat"><span class="dot red"></span> <strong id="escalationCount">1</strong> 个升级待处理</div>
-    <div class="global-stat"><span class="dot yellow"></span> <strong>12</strong> 项技术债</div>
+    <div class="global-stat"><span class="dot yellow"></span> <strong id="totalTechDebt">—</strong> 项技术债</div>
     <div class="global-stat"><span class="dot blue"></span> <strong>8</strong> 个跨项目依赖</div>
     <div class="global-stat" style="font-family:var(--font-mono)">⏣ 今日 Token 2.4M</div>
   </div>
@@ -1430,944 +1430,366 @@ tr.detail-row td {
      SCRIPTS
      ====================================================================== -->
 <script>
-// ==========================================================================
-// Escalation Data — full context for each decision
-// ==========================================================================
-const escalations = {
-  'esc-1': {
-    id: 'esc-1',
-    project: 'data-pipeline',
-    projectHealth: 'red',
-    agent: 'Agent #3',
-    service: 'stream-processor',
-    waiting: '2h 34m',
-    urgency: 'urgent',
-    title: '选择消息队列方案：Kafka vs Redis Streams',
-    context: `stream-processor 需要实现实时事件流的缓冲和分发。当前数据量预估为 50k msg/s，需要至少一次投递保证。项目已有的基础设施包括 Redis 7（用于缓存），但没有 Kafka 集群。
+// ===================================================================
+// API CLIENT
+// ===================================================================
+const API = '/api';
+let projectsData = {};
+let agentsData = {};
+let wsClient = null;
 
-该决策直接影响架构约束：
-• no_new_deps_without_adr — 无论选哪个都引入新依赖，需要记录 ADR
-• layer_dependency — 消息队列会成为 infrastructure 层的新组件
+async function api(path, opts) {
+  const res = await fetch(API + path, {
+    headers: { 'Content-Type': 'application/json' },
+    ...opts
+  });
+  return res.json();
+}
 
-Agent 在自检时触发了 escalation：因为这属于 "new_dependency" 类型，按 DoD 规则必须升级人工。`,
-    options: [
-      {
-        name: 'Apache Kafka',
-        recommended: true,
-        pros: ['吞吐量 1M+ msg/s，远超需求', '持久化 + 消息回溯原生支持', '生态成熟，ClickHouse Kafka Engine 直连'],
-        cons: ['需要部署 ZooKeeper/KRaft 集群', '运维复杂度高（当前团队无 Kafka 经验）', '引入 Java 依赖链到 Python 项目'],
-      },
-      {
-        name: 'Redis Streams',
-        recommended: false,
-        pros: ['复用已有 Redis 基础设施，零运维增量', 'Python redis-py 库已使用，无新语言依赖', '5.0+ 原生支持 consumer group'],
-        cons: ['50k msg/s 接近 Redis Streams 性能上限', '消息持久化弱于 Kafka，断电可能丢数据', 'ClickHouse 无原生 Redis Streams 连接器'],
+// ===================================================================
+// INIT — load all data on page load
+// ===================================================================
+async function initApp() {
+  try {
+    const stats = await api('/stats');
+    if (stats.success) {
+      document.getElementById('totalProjects').textContent = stats.data.totalProjects;
+      document.getElementById('totalAgents').textContent = stats.data.totalAgents;
+      document.getElementById('totalTechDebt').textContent = stats.data.totalTechDebt;
+      document.getElementById('escalationCount').textContent = stats.data.pendingDecisions;
+      if (stats.data.pendingDecisions === 0) {
+        document.getElementById('inboxBadge').textContent = '已清空';
       }
-    ],
-    reasoning: `Agent 倾向 Kafka，理由：
-1. 50k msg/s 已经接近 Redis Streams 的单实例上限，后续增长空间有限
-2. ClickHouse 的 Kafka Engine 可以实现消息到 OLAP 的零代码接入
-3. 虽然运维成本是短期痛点，但团队已经在规划引入 Kafka 用于其他业务，早晚要面对
-
-风险提示：如果选 Kafka，建议先做 PoC 验证 ClickHouse Kafka Engine 的延迟是否满足需求。`,
-    impact: {
-      constraints: ['no_new_deps_without_adr (将触发)', 'layer_dependency (新增 infra 组件)'],
-      services: ['stream-processor', 'clickhouse', 'docker-compose (新增 kafka 服务)'],
-      cost_estimate: 'Kafka 集群约 +2GB 内存 / +4 vCPU / 运维人力 +0.5 人周/月',
     }
-  },
 
-  'esc-3': {
-    id: 'esc-3',
-    project: 'user-mobile',
-    projectHealth: 'green',
-    agent: 'Agent #1',
-    service: 'mobile-app',
-    waiting: '30m',
-    urgency: 'normal',
-    title: 'iOS 和 Android 是否共享导航组件？',
-    context: `用户模块的导航结构在 iOS 和 Android 上存在平台差异：iOS 期望底部 Tab Bar 风格，Android 期望 Material Design 的 Navigation Rail。
+    const projRes = await api('/projects');
+    if (projRes.success) {
+      projRes.data.forEach(p => { projectsData[p.id] = p; });
+      renderFleetView();
+    }
+    connectWS();
+  } catch(e) { console.error('Init error:', e); }
+}
 
-Agent 识别到两个方案各有优劣，且涉及 UI 一致性 vs 平台原生体验的 trade-off。这属于设计决策而非纯技术决策，按 DoD 的 ambiguous_requirements 规则升级。`,
-    options: [
-      {
-        name: '平台各自实现导航，共享业务逻辑',
-        recommended: true,
-        pros: ['完全遵循各平台设计规范', '用户感知更原生', '未来平台差异更容易处理'],
-        cons: ['导航代码无法复用', '新增页面需要在两处注册'],
-      },
-      {
-        name: '统一导航组件，平台自适应',
-        recommended: false,
-        pros: ['一次编写，两处运行', '维护成本低', '导航行为一致性好'],
-        cons: ['iOS 用户可能觉得不够 iOS', '特殊情况需要在组件内写 if-platform'],
+// ===================================================================
+// WEBSOCKET — real-time updates
+// ===================================================================
+function connectWS() {
+  const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  wsClient = new WebSocket(proto + '//' + location.host + '/ws');
+  wsClient.onopen = () => {
+    Object.keys(projectsData).forEach(id => {
+      wsClient.send(JSON.stringify({ type: 'subscribe', projectId: id }));
+    });
+    document.getElementById('wsStatus').textContent = 'WS 已连接';
+    document.getElementById('wsStatus').style.color = 'var(--green)';
+  };
+  wsClient.onmessage = (e) => {
+    try {
+      const msg = JSON.parse(e.data);
+      if (msg.type === 'agent_state' && msg.data) {
+        const a = agentsData[msg.agentId];
+        if (a) Object.assign(a, msg.data);
       }
-    ],
-    reasoning: `Agent 倾向平台各自实现，理由：
-1. 项目已有 platform-specific 代码组织模式（*.ios.ts / *.android.ts）
-2. 导航层代码量小（~200 行/平台），复用收益不大
-3. 业务逻辑（screens, hooks, stores）仍然 100% 共享`,
-    impact: {
-      constraints: ['no_new_deps_without_adr (无影响)'],
-      services: ['iOS-app', 'Android-app'],
-      cost_estimate: '约 +2 天开发时间（导航代码双写），长期维护成本相近',
+      if (msg.type === 'heartbeat') {
+        document.getElementById('wsStatus').textContent = '最后更新：' + new Date(msg.at).toLocaleTimeString();
+      }
+      if (msg.type === 'iteration_update' && msg.projectId && projectsData[msg.projectId]) {
+        projectsData[msg.projectId]._dirty = true;
+      }
+      if (msg.type === 'escalation') {
+        updateEscalationBadge();
+      }
+    } catch {}
+  };
+  wsClient.onclose = () => {
+    document.getElementById('wsStatus').textContent = 'WS 断开';
+    document.getElementById('wsStatus').style.color = 'var(--red)';
+    setTimeout(connectWS, 5000);
+  };
+}
+
+// ===================================================================
+// FLEET VIEW
+// ===================================================================
+function renderFleetView() {
+  const projects = Object.values(projectsData);
+  let html = '';
+  projects.forEach(p => {
+    const healthClass = p.health || 'green';
+    const tags = (p.techTags || []).map(t => {
+      const cls = t.includes('React') || t.includes('mobile') ? 'mobile' :
+                  t.includes('Go') || t.includes('Python') ? 'backend' :
+                  t.includes('Postgres') || t.includes('MySQL') || t.includes('ClickHouse') || t.includes('Redis') ? 'data' : 'web';
+      return '<span class="service-tag ' + cls + '"><span class="mini-dot" style="background:var(--green)"></span> ' + t + '</span>';
+    }).join('');
+
+    const activeIters = (p._iterations || []).filter(i => i.status === 'running' || i.status === 'blocked').length;
+    const debtCount = (p.techDebts || []).length;
+    const debtClass = debtCount === 0 ? 'debt-low' : debtCount <= 3 ? 'debt-warn' : 'debt-high';
+    const blockCount = (p._agents || []).filter(a => a.status === 'blocked').length;
+
+    html += '<div class="project-card' + (blockCount > 0 ? ' critical' : '') + '" onclick="showProjectDetail(\'' + p.id + '\')">' +
+      (blockCount > 0 ? '<div class="card-escalation-badge" title="Agent 阻塞">!</div>' : '') +
+      '<div class="card-header"><div class="card-title"><span class="card-health ' + healthClass + '"></span> ' + p.name + '</div>' +
+      '<span class="card-tech">' + (p.techTags ? p.techTags[0] : '') + '</span></div>' +
+      '<div class="service-tags">' + tags + '</div>' +
+      '<div class="card-arch-meta">' +
+      '<span class="arch-badge ' + debtClass + '">💸 ' + debtCount + ' 项技术债</span>' +
+      '<span class="arch-badge deps">🔗 ' + (p._crossDeps || 0) + ' 个依赖</span>' +
+      '</div>' +
+      '<div class="card-metrics">' +
+      '<div class="metric ' + healthClass + '"><strong>' + (activeIters || 0) + '</strong> 进行中迭代</div>' +
+      '<div class="metric"><strong>' + ((p._agents || []).length) + '</strong> 个 Agent</div>' +
+      '<div class="metric"><strong>' + (p.domain || '—') + '</strong> 领域</div>' +
+      '</div>' +
+      '<div class="card-bar"><div class="fill" style="width:' + Math.min(100, (activeIters || 0) * 20) + '%"></div></div>' +
+      '<div class="card-footer"><span>' + p.description + '</span></div>' +
+      '</div>';
+  });
+  document.querySelector('#view-fleet .fleet-grid').innerHTML = html;
+}
+
+// ===================================================================
+// PROJECT DETAIL — fetch and render
+// ===================================================================
+async function showProjectDetail(projectId) {
+  document.querySelectorAll('.product-list-item').forEach(e => e.classList.remove('active'));
+  try {
+    const res = await api('/projects/' + projectId);
+    if (!res.success) { alert('Project not found'); return; }
+    const p = res.data;
+    projectsData[projectId] = p;
+    projectsData[projectId]._iterations = p.iterations || [];
+    projectsData[projectId]._agents = p.agents || [];
+    projectsData[projectId]._dirty = false;
+
+    p.agents.forEach(a => { agentsData[a.id] = a; });
+
+    // Header
+    document.getElementById('detail-health').className = 'card-health ' + (p.health || 'green');
+    document.getElementById('detail-name').textContent = p.name;
+    document.getElementById('detail-meta').textContent = (p.techTags || []).join(' · ') + ' · ' + (p.agents || []).length + ' 个 Agent';
+
+    // Description
+    const descEl = document.getElementById('detail-description');
+    if (p.description) {
+      descEl.classList.remove('hidden');
+      document.getElementById('detail-desc-text').textContent = p.description;
+      document.getElementById('detail-desc-tags').innerHTML = (p.techTags || []).map(t => '<span class="desc-tag">' + t + '</span>').join('');
+    } else { descEl.classList.add('hidden'); }
+
+    // Iteration board
+    renderIterationBoard(projectId, p.iterations || [], p.history || []);
+    // Service topology — simplified from API data
+    renderTopology(projectId, p.agents || []);
+    // Constraint compliance — from project config
+    renderConstraints(projectId);
+    // Agent timeline
+    renderTimeline(projectId, p.agents || []);
+    // Decisions
+    renderDecisionsPanel(p.decisions || []);
+    // Tech debt
+    renderProjectTechDebtFromData(p.techDebts || []);
+
+    showView('project-detail');
+  } catch(e) { console.error('Load detail error:', e); alert('加载项目详情失败'); }
+}
+
+// ===================================================================
+// ITERATION BOARD (task-centric)
+// ===================================================================
+function renderIterationBoard(projectId, iterations, history) {
+  const iterEl = document.getElementById('detail-iter-board');
+  if (!iterations || iterations.length === 0) { iterEl.classList.add('hidden'); return; }
+  iterEl.classList.remove('hidden');
+
+  const activeIters = iterations.filter(i => i.status === 'running' || i.status === 'blocked');
+  const countEl = document.getElementById('detail-iter-count');
+  countEl.textContent = activeIters.length + ' 个任务';
+  countEl.classList.toggle('warn', activeIters.length > 4);
+
+  // Concurrency warning
+  const warnEl = document.getElementById('concurrency-warn');
+  if (activeIters.length > 4) {
+    warnEl.classList.remove('hidden');
+    document.getElementById('concurrency-warn-text').innerHTML =
+      '<strong>并行任务过多（' + activeIters.length + ' 个 > 建议上限 4 个）</strong>，代码冲突与 Agent 上下文切换风险显著升高。建议等待部分任务完成后再启动新迭代。';
+  } else { warnEl.classList.add('hidden'); }
+
+  // History button
+  const histBtn = document.querySelector('#detail-iter-board .btn-back');
+  if (histBtn) histBtn.style.display = (history && history.length > 0) ? '' : 'none';
+  // Store history for modal
+  window._currentHistory = history || [];
+
+  const SI = { 'done': '✓', 'in-progress': '◉', 'pending': '○', 'blocked': '⏸' };
+  let rowsHtml = '';
+
+  activeIters.forEach((iter, idx) => {
+    const tasks = iter.tasks || [];
+    const doneCount = tasks.filter(t => t.status === 'done').length;
+    const totalCount = tasks.length;
+    const frac = totalCount > 0 ? doneCount + '/' + totalCount : '—';
+    let fillClass = '';
+    if (totalCount > 0) {
+      if (tasks.some(t => t.status === 'blocked')) fillClass = 'danger';
+      else if (doneCount / totalCount < 0.5) fillClass = 'warn';
     }
+    const pctWidth = totalCount > 0 ? (doneCount / totalCount * 100) : 0;
+    const goalSummary = (iter.goal || '').length > 45 ? iter.goal.slice(0, 45) + '...' : (iter.goal || '');
+    const isBlocked = tasks.some(t => t.status === 'blocked');
+
+    rowsHtml += '<tr class="iter-row" id="iter-row-' + idx + '" onclick="toggleIterDetail(' + idx + ')">' +
+      '<td class="col-id"><span class="task-id-cell">' + (iter.taskId || '—') + '</span></td>' +
+      '<td class="col-goal"><span class="goal-cell-title" title="' + (iter.goal || '').replace(/"/g, '&quot;') + '">' + goalSummary + '</span></td>' +
+      '<td class="col-action"><span class="action-cell"><span class="action-dot' + (isBlocked ? ' blocked' : '') + '"></span>' + (iter.currentAction || '—') + '</span></td>' +
+      '<td class="col-agent"><span class="agent-badge-cell ' + getAgentClass(iter.agentId) + '">' + (iter.agentId || '—') + '</span></td>' +
+      '<td class="col-prog"><span class="prog-cell"><span class="prog-bar-mini"><span class="fill ' + fillClass + '" style="width:' + pctWidth + '%"></span></span><span class="prog-frac">' + frac + '</span></span></td>' +
+      '<td class="col-expand"><span class="expand-icon">▶</span></td></tr>';
+
+    // Detail row
+    const svcTags = (iter.services || []).map(s => '<span class="svc-tag-detail">' + s + '</span>').join('');
+    let tasksHtml = '';
+    tasks.forEach(t => {
+      tasksHtml += '<div class="detail-task ' + t.status + '">' +
+        '<span class="dt-status ' + t.status + '">' + (SI[t.status] || '○') + '</span>' +
+        '<span class="dt-name">' + t.name + '</span>' +
+        '<span class="dt-svc">' + (t.service || '') + '</span></div>';
+    });
+    rowsHtml += '<tr class="detail-row" id="detail-row-' + idx + '"><td colspan="6">' +
+      '<div class="detail-block"><div class="detail-goal">' + (iter.goal || '') + '</div>' +
+      '<div class="svc-tags">' + svcTags + '</div>' +
+      '<div class="detail-meta">⏣ ' + (iter.meta || '') + '</div>' +
+      '<div class="detail-tasks">' + tasksHtml + '</div></div></td></tr>';
+  });
+  document.getElementById('detail-iter-tbody').innerHTML = rowsHtml;
+}
+
+function getAgentClass(agentId) {
+  const num = parseInt((agentId || '').replace('agent-', ''));
+  if (num % 3 === 1) return 'a1';
+  if (num % 3 === 2) return 'a2';
+  return 'a3';
+}
+
+// ===================================================================
+// SUB-RENDERERS
+// ===================================================================
+function renderTopology(projectId, agents) {
+  const layers = { '前端': [], '后端': [], '数据层': [] };
+  agents.forEach(a => {
+    const svc = a.service || 'unknown';
+    if (svc.includes('web') || svc.includes('app') || svc.includes('mobile')) layers['前端'].push(a);
+    else if (svc.includes('redis') || svc.includes('postgres') || svc.includes('mysql') || svc.includes('clickhouse') || svc.includes('mq')) layers['数据层'].push(a);
+    else layers['后端'].push(a);
+  });
+  let html = '';
+  Object.entries(layers).forEach(([name, ags]) => {
+    if (ags.length === 0) return;
+    html += '<div class="topology-layer"><span class="topology-label">' + name + '</span>';
+    ags.forEach(a => {
+      const cls = a.status === 'blocked' ? 'critical' : a.status === 'running' ? 'healthy' : 'warning';
+      const svcLabel = { 'running': '运行中', 'blocked': '已阻塞', 'idle': '空闲' };
+      html += '<div class="service-node ' + cls + '"><div class="svc-name">🔧 ' + (a.service || 'unknown') + '</div>' +
+        '<div class="svc-meta"><span>' + (a.mode || 'local') + '</span></div>' +
+        '<span class="svc-agent ' + (a.status === 'running' ? 'active' : 'blocked') + '">' + a.id + ' ' + (svcLabel[a.status] || '') + '</span></div>';
+    });
+    html += '</div>';
+  });
+  document.getElementById('detail-topology').innerHTML = html || '<div style="color:var(--text-muted);font-size:12px;text-align:center;padding:20px">无服务拓扑数据</div>';
+}
+
+function renderConstraints(projectId) {
+  const p = projectsData[projectId];
+  const constraints = p ? (p.constraints || []) : [];
+  if (constraints.length === 0) {
+    document.getElementById('detail-constraints').innerHTML = '<div style="color:var(--text-muted);font-size:12px;text-align:center;padding:20px">无约束配置</div>';
+    return;
   }
-};
+  document.getElementById('detail-constraints').innerHTML = constraints.map(c => {
+    const cls = c.severity === 'error' ? 'fail' : c.severity === 'warning' ? 'warn' : 'pass';
+    const icon = c.severity === 'error' ? '✗' : c.severity === 'warning' ? '⚠' : '✓';
+    return '<div class="constraint-row"><span class="constraint-name">' + c.name + '</span>' +
+      '<span class="constraint-service">' + (c.description || '') + '</span>' +
+      '<span class="constraint-status ' + cls + '">' + icon + ' ' + c.severity + '</span></div>';
+  }).join('');
+}
 
-// ==========================================================================
-// View switching
-// ==========================================================================
+function renderTimeline(projectId, agents) {
+  const items = [];
+  agents.forEach(a => {
+    items.push({ time: a.heartbeatAt ? new Date(a.heartbeatAt).toLocaleTimeString() : '—', desc: a.currentAction || a.currentPhase || '无活动', agent: a.id, type: a.status === 'blocked' ? 'error' : a.status === 'running' ? 'active' : 'done' });
+  });
+  document.getElementById('detail-timeline').innerHTML = items.map(t =>
+    '<div class="timeline-item ' + t.type + '"><div class="timeline-time">' + t.time + '</div><div class="timeline-desc">' + t.desc + '</div><div class="timeline-agent">' + t.agent + '</div></div>'
+  ).join('');
+}
+
+function renderDecisionsPanel(decisions) {
+  if (!decisions || decisions.length === 0) {
+    document.getElementById('detail-decisions').innerHTML = '<div style="text-align:center;color:var(--text-muted);font-size:12px;padding:20px">暂无决策</div>';
+    return;
+  }
+  document.getElementById('detail-decisions').innerHTML = decisions.map(d =>
+    '<div class="decision-item" onclick="openDecisionFromData(\'' + d.id + '\')">' +
+    '<div class="decision-id">' + d.id + '</div><div class="decision-topic">' + d.topic + '</div>' +
+    '<div class="decision-meta">' + (d.status === 'pending' ? '⏳ 待处理' : '✅ 已决定') + ' · ' + (d.urgency || 'normal') + '</div></div>'
+  ).join('');
+}
+
+function renderProjectTechDebtFromData(debts) {
+  if (!debts || debts.length === 0) {
+    document.getElementById('detail-techdebt').innerHTML = '<div style="text-align:center;color:var(--text-muted);font-size:12px;padding:20px">✅ 该项目暂无技术债</div>';
+    return;
+  }
+  const sevLabel = { high: '🔴 高', medium: '🟡 中', low: '⚪ 低' };
+  document.getElementById('detail-techdebt').innerHTML = '<table class="debt-table" style="margin:0"><thead><tr><th>ID</th><th>描述</th><th>严重</th><th>原因</th><th>计划</th></tr></thead><tbody>' +
+    debts.map(d => '<tr><td style="font-family:var(--font-mono);font-size:11px;color:var(--blue)">' + d.id + '</td><td>' + d.description + (d.overdue ? '<span class="debt-overdue">逾期</span>' : '') + '</td><td><span class="debt-severity ' + d.severity + '">' + (sevLabel[d.severity] || d.severity) + '</span></td><td style="font-size:11px;color:var(--text-muted)">' + (d.cause || '') + '</td><td style="font-size:11px">' + (d.plan || '') + '</td></tr>').join('') +
+    '</tbody></table>';
+}
+
+// ===================================================================
+// VIEW SWITCHING
+// ===================================================================
 function showView(view) {
   document.querySelectorAll('[id^="view-"]').forEach(el => el.classList.add('hidden'));
   const target = document.getElementById('view-' + view);
   if (target) target.classList.remove('hidden');
   document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
-  const navItem = document.querySelector(`[data-view="${view}"]`);
+  const navItem = document.querySelector('[data-view="' + view + '"]');
   if (navItem) navItem.classList.add('active');
+
+  if (view === 'techdebt') renderTechDebtView();
+  else if (view === 'crossdeps') renderCrossDepsView();
+  else if (view === 'standards') renderStandardsView();
+  else if (view === 'fleet') initApp(); // reload fleet
 }
 
-// ==========================================================================
-// Live Inspection — mock data & rendering
-// ==========================================================================
-const agentLiveStates = {
-  'agent-2-tracker': {
-    id: 'agent-2',
-    project: 'tracker-system',
-    service: 'tracker-service',
-    mode: 'cloud',                          // cloud | local
-    status: 'running',                      // running | blocked | idle
-    current_iteration: 4,
-    current_phase: '自检中',
-    current_action: '运行全部约束检查，验证认证中间件的改动未破坏架构约束',
-    heartbeat: '2 秒前',
-    started: '1h 22m',
-    iterations: [
-      { num: 4, status: 'running', action: '实现用户认证中间件', cost: '45k', time: '16:32' },
-      { num: 3, status: 'pass',   action: '重构错误处理逻辑',     cost: '38k', time: '16:15' },
-      { num: 2, status: 'fail',   action: '添加 JWT 验证（覆盖率不足）', cost: '52k', time: '15:50' },
-      { num: 1, status: 'pass',   action: '搭建项目骨架 + DoD 配置', cost: '28k', time: '15:10' },
-    ],
-    self_checks: [
-      { name: 'no_circular_deps',      status: 'done',    time: '2s' },
-      { name: 'layer_dependency',       status: 'done',    time: '3s' },
-      { name: 'no_new_deps_without_adr',status: 'done',    time: '1s' },
-      { name: 'types (tsc --noEmit)',   status: 'running', time: '...' },
-      { name: 'lint (eslint)',          status: 'pending', time: '—' },
-      { name: 'tests (jest)',           status: 'pending', time: '—' },
-      { name: 'coverage',               status: 'pending', time: '—' },
-      { name: 'security (audit-ci)',    status: 'pending', time: '—' },
-    ],
-    files_changed: [
-      { name: 'src/middleware/auth.ts',       diff: '+120', type: 'add' },
-      { name: 'src/middleware/index.ts',      diff: '+3',   type: 'mod' },
-      { name: 'tests/middleware/auth.test.ts',diff: '+85',  type: 'add' },
-      { name: 'src/types/auth.d.ts',          diff: '+22',  type: 'add' },
-    ],
-    resources: { tokens: '240k', estimated: '120k', elapsed: '1h 22m', rate: '2.9k/min' },
-    messages: [
-      { from: 'human', text: '认证中间件的 session 过期时间设为 24h，不要用默认的 7 天', time: '16:25', status: 'acknowledged' },
-      { from: 'agent', text: '已收到，已将 session 过期时间改为 24h。相关的 auth.ts L45 已更新。', time: '16:26', status: 'acknowledged' },
-      { from: 'human', text: '另外确认一下：refresh token 的逻辑是否也同步调整了？', time: '16:28', status: 'acknowledged' },
-      { from: 'agent', text: 'refresh token 过期时间 7 天保持不变（这是安全团队的规范）。只有 access token session 改为 24h。', time: '16:29', status: 'acknowledged' },
-    ],
-  },
-  'agent-3-data': {
-    id: 'agent-3',
-    project: 'data-pipeline',
-    service: 'stream-processor',
-    mode: 'cloud',
-    status: 'blocked',
-    current_iteration: 3,
-    current_phase: '等待人工决策',
-    current_action: '流处理器等待消息队列选型结果。Agent 已暂停迭代，等待升级事件 esc-1 的决策。',
-    heartbeat: '15 秒前',
-    started: '4h 10m',
-    iterations: [
-      { num: 3, status: 'blocked', action: '升级：选择消息队列方案', cost: '32k', time: '13:26' },
-      { num: 2, status: 'fail',    action: '引入 kafka-python 未记录 ADR', cost: '58k', time: '13:00' },
-      { num: 1, status: 'pass',    action: '搭建 stream-processor 骨架', cost: '41k', time: '12:20' },
-    ],
-    self_checks: [
-      { name: 'no_circular_deps',       status: 'done',  time: '2s' },
-      { name: 'layer_dependency',        status: 'done',  time: '1s' },
-      { name: 'no_new_deps_without_adr', status: 'done',  time: '1s' },
-    ],
-    files_changed: [
-      { name: 'src/stream/processor.py',    diff: '+95',  type: 'add' },
-      { name: 'src/stream/__init__.py',     diff: '+5',   type: 'mod' },
-      { name: 'requirements.txt',           diff: '+1',   type: 'mod' },
-    ],
-    resources: { tokens: '790k', estimated: '200k', elapsed: '4h 10m', rate: '3.1k/min' },
-  },
-  'agent-1-mobile': {
-    id: 'agent-1',
-    project: 'user-mobile',
-    service: 'mobile-app',
-    mode: 'local',
-    status: 'running',
-    current_iteration: 4,
-    current_phase: '实现中',
-    current_action: '为 iOS 和 Android 实现独立的导航组件，共享业务逻辑层',
-    heartbeat: '5 秒前',
-    started: '2h 05m',
-    iterations: [
-      { num: 4, status: 'running', action: '实现平台独立导航组件',     cost: '38k', time: '17:00' },
-      { num: 3, status: 'pass',    action: '实现生物识别认证页',       cost: '44k', time: '16:35' },
-      { num: 2, status: 'pass',    action: '添加用户资料编辑页面',     cost: '35k', time: '16:05' },
-      { num: 1, status: 'pass',    action: '搭建 React Native 项目',   cost: '25k', time: '15:30' },
-    ],
-    self_checks: [
-      { name: 'lint (eslint)',     status: 'done',    time: '3s' },
-      { name: 'types (tsc)',       status: 'done',    time: '5s' },
-      { name: 'tests (jest)',      status: 'running', time: '...' },
-      { name: 'coverage',          status: 'pending', time: '—' },
-    ],
-    files_changed: [
-      { name: 'src/nav/ios.tabs.tsx',       diff: '+210', type: 'add' },
-      { name: 'src/nav/android.rail.tsx',   diff: '+185', type: 'add' },
-      { name: 'src/nav/shared.ts',          diff: '+45',  type: 'add' },
-      { name: 'src/screens/profile.tsx',    diff: '+32',  type: 'mod' },
-    ],
-    resources: { tokens: '510k', estimated: '150k', elapsed: '2h 05m', rate: '4.1k/min' },
-  },
-};
-
-function openLiveInspection(agentKey) {
-  const a = agentLiveStates[agentKey];
-  if (!a) return;
-
-  // Header
-  const modeLabel = a.mode === 'cloud' ? '云 Agent' : '本地 Agent';
-  const modeClass = a.mode === 'cloud' ? 'cloud' : 'local';
-  document.getElementById('inspect-header').innerHTML = `
-    <span class="inspect-agent-dot ${a.status}"></span>
-    <div class="inspect-agent-info">
-      <h2>${a.id} · ${a.project} · ${a.service}</h2>
-      <div class="sub">启动于 ${a.started} · 心跳 ${a.heartbeat}</div>
-    </div>
-    <div class="inspect-meta">
-      <div class="heartbeat">🫀 ${a.heartbeat}</div>
-      <span class="mode-badge ${modeClass}">${modeLabel}</span>
-    </div>`;
-
-  // Resources
-  document.getElementById('inspect-resources').innerHTML = `
-    <div class="resource-stat"><strong>⏣ ${a.resources.tokens}</strong> 已消耗 Token</div>
-    <div class="resource-stat"><strong>⏣ ${a.resources.estimated}</strong> 预估剩余</div>
-    <div class="resource-stat"><strong>${a.resources.elapsed}</strong> 运行时长</div>
-    <div class="resource-stat"><strong>${a.resources.rate}</strong> 平均速率</div>`;
-
-  // Current iteration
-  document.getElementById('inspect-current').innerHTML = `
-    <div class="iter-phase">第 ${a.current_iteration} 轮 · ${a.current_phase}</div>
-    <div class="iter-action">${a.current_action}</div>
-    <div class="iter-meta-row">
-      <span>⏣ ${a.iterations.find(i => i.num === a.current_iteration)?.cost || '—'} 本轮</span>
-      <span>🫀 ${a.heartbeat}</span>
-    </div>`;
-
-  // Self-check progress
-  let checksHtml = '';
-  a.self_checks.forEach(c => {
-    let icon = '○', cls = 'pending';
-    if (c.status === 'done') { icon = '✓'; cls = 'done'; }
-    else if (c.status === 'running') { icon = '◉'; cls = 'running'; }
-    checksHtml += `<div class="check-progress-item">
-      <span class="check-icon ${cls}">${icon}</span>
-      <span class="check-name">${c.name}</span>
-      <span class="check-time">${c.time}</span></div>`;
-  });
-  document.getElementById('inspect-checks').innerHTML = checksHtml;
-
-  // Files changed
-  let filesHtml = '';
-  a.files_changed.forEach(f => {
-    filesHtml += `<div class="file-item">
-      <span class="file-name">${f.name}</span>
-      <span class="file-diff ${f.type}">${f.diff}</span></div>`;
-  });
-  document.getElementById('inspect-files').innerHTML = filesHtml;
-
-  // Iteration history
-  let historyHtml = `<tr><th>#</th><th></th><th>动作</th><th>Token</th><th>时间</th></tr>`;
-  a.iterations.forEach(i => {
-    const statusIcon = i.status === 'pass' ? '✓' : i.status === 'fail' ? '✗' : i.status === 'running' ? '◉' : '⏸';
-    const statusClass = i.status === 'fail' ? 'fail' : 'pass';
-    const rowStyle = i.status === 'running' ? 'font-weight:600' : '';
-    historyHtml += `<tr style="${rowStyle}">
-      <td class="iter-num">#${i.num}</td>
-      <td class="iter-status ${statusClass}">${statusIcon}</td>
-      <td class="iter-action-col">${i.action}</td>
-      <td class="iter-cost">⏣${i.cost}</td>
-      <td class="iter-time">${i.time}</td></tr>`;
-  });
-  document.getElementById('inspect-history').innerHTML = historyHtml;
-
-  // Actions (depend on mode and status)
-  let actionsHtml = '';
-  if (a.status === 'running') {
-    actionsHtml += `<button class="btn-action warn" onclick="alert('Agent 将在当前迭代完成后暂停')">⏸ 暂停 Agent</button>`;
-    if (a.mode === 'cloud') {
-      actionsHtml += `<button class="btn-action" onclick="requestVerboseLogs()">🔍 请求详细日志</button>`;
-    } else {
-      actionsHtml += `<button class="btn-action primary" onclick="alert('启动 Claude Code attach 到会话 ${a.id}')">💻 进入终端会话</button>`;
-    }
-    actionsHtml += `<button class="btn-action danger" onclick="alert('确定终止 Agent ${a.id}？')">⏹ 终止任务</button>`;
-  } else if (a.status === 'blocked') {
-    actionsHtml += `<button class="btn-action primary" onclick="openDecisionDrawer('esc-1')">📋 查看升级事件</button>`;
-    actionsHtml += `<button class="btn-action danger" onclick="alert('确定终止 Agent ${a.id}？')">⏹ 终止任务</button>`;
-  }
-  document.getElementById('inspect-actions').innerHTML = actionsHtml;
-
-  // ---- Agent Console ----
-  const msgs = a.messages || [];
-  let msgsHtml = '';
-  if (msgs.length === 0) {
-    msgsHtml = '<div class="console-empty">还没有消息记录。在下方输入指令与 Agent 沟通。</div>';
-  } else {
-    msgs.forEach(m => {
-      const side = m.from === 'human' ? 'human' : 'agent';
-      const statusLabel = m.status === 'acknowledged' ? '✓ 已确认' : '📤 待拉取';
-      const statusClass = m.status === 'acknowledged' ? 'acknowledged' : 'delivered';
-      msgsHtml += `<div class="console-msg ${side}">
-        <div>${m.text}</div>
-        <div class="msg-time">${m.time} · <span class="msg-status ${statusClass}">${statusLabel}</span></div>
-      </div>`;
-    });
-  }
-  document.getElementById('console-messages').innerHTML = msgsHtml;
-  // Scroll to bottom
-  setTimeout(() => {
-    const el = document.getElementById('console-messages');
-    if (el) el.scrollTop = el.scrollHeight;
-  }, 100);
-
-  // Quick actions
-  document.getElementById('console-quick').innerHTML = `
-    <button class="console-quick" onclick="fillConsoleInput('请解释当前方案的 trade-off')">💡 追问理由</button>
-    <button class="console-quick" onclick="fillConsoleInput('暂停当前方向，先')">↩ 调整方向</button>
-    <button class="console-quick" onclick="fillConsoleInput('跳过 lint 检查，继续')">⏭ 跳过约束</button>
-    <button class="console-quick" onclick="fillConsoleInput('把当前进度提交 git，commit message:')">💾 请求提交</button>
-    <button class="console-quick" onclick="fillConsoleInput('修改 DoD：')">📝 修改 DoD</button>
-  `;
-
-  // Store current agent key for sendConsoleMessage
-  document.getElementById('console-input').dataset.agentKey = agentKey;
-
-  showView('live-inspection');
-}
-
-// ---- Console functions ----
-function fillConsoleInput(text) {
-  const input = document.getElementById('console-input');
-  input.value = text;
-  input.focus();
-}
-
-function sendConsoleMessage() {
-  const input = document.getElementById('console-input');
-  const text = input.value.trim();
-  if (!text) return;
-
-  const agentKey = input.dataset.agentKey;
-  const a = agentLiveStates[agentKey];
-  if (!a) return;
-
-  // Add message to agent's message log
-  if (!a.messages) a.messages = [];
-  a.messages.push({ from: 'human', text: text, time: new Date().toLocaleTimeString('zh-CN', {hour:'2-digit',minute:'2-digit'}), status: 'delivered' });
-
-  // Rerender messages
-  const msgs = a.messages;
-  let msgsHtml = '';
-  msgs.forEach(m => {
-    const side = m.from === 'human' ? 'human' : 'agent';
-    const statusLabel = m.status === 'acknowledged' ? '✓ 已确认' : '📤 待拉取';
-    const statusClass = m.status === 'acknowledged' ? 'acknowledged' : 'delivered';
-    msgsHtml += `<div class="console-msg ${side}">
-      <div>${m.text}</div>
-      <div class="msg-time">${m.time} · <span class="msg-status ${statusClass}">${statusLabel}</span></div>
-    </div>`;
-  });
-  document.getElementById('console-messages').innerHTML = msgsHtml;
-  const el = document.getElementById('console-messages');
-  if (el) el.scrollTop = el.scrollHeight;
-
-  // Simulate agent acknowledgment after 2 seconds (only for demo)
-  setTimeout(() => {
-    a.messages[a.messages.length-1].status = 'acknowledged';
-    // Re-render
-    let msgsHtml2 = '';
-    a.messages.forEach(m => {
-      const side = m.from === 'human' ? 'human' : 'agent';
-      const statusLabel = m.status === 'acknowledged' ? '✓ 已确认' : '📤 待拉取';
-      const statusClass = m.status === 'acknowledged' ? 'acknowledged' : 'delivered';
-      msgsHtml2 += `<div class="console-msg ${side}">
-        <div>${m.text}</div>
-        <div class="msg-time">${m.time} · <span class="msg-status ${statusClass}">${statusLabel}</span></div>
-      </div>`;
-    });
-    document.getElementById('console-messages').innerHTML = msgsHtml2;
-    document.getElementById('console-sync-status').textContent = '消息同步: ✓ 已确认';
-    document.getElementById('console-sync-status').classList.add('synced');
-  }, 2000);
-
-  document.getElementById('console-sync-status').textContent = '消息同步: 📤 等待 Agent 拉取...';
-  document.getElementById('console-sync-status').classList.remove('synced');
-
-  input.value = '';
-}
-
-function requestVerboseLogs() {
-  document.getElementById('console-sync-status').textContent = '消息同步: 📤 已请求详细日志';
-  alert('已请求 Agent 在下一轮迭代中上报详细日志（verbose 模式）');
-}
-
-// ==========================================================================
-// Decision Drawer
-// ==========================================================================
-function openDecisionDrawer(escId) {
-  const esc = escalations[escId];
-  if (!esc) return;
-
-  let optionsHtml = '';
-  esc.options.forEach(opt => {
-    optionsHtml += `
-      <div class="option-card ${opt.recommended ? 'recommended' : ''}">
-        <h5>${opt.name}</h5>
-        <div class="pros-cons">
-          <div class="pros">${opt.pros.map(p => p).join('<br>')}</div>
-          <div class="cons">${opt.cons.map(c => c).join('<br>')}</div>
-        </div>
-      </div>`;
-  });
-
-  let impactTags = '';
-  esc.impact.constraints.forEach(c => {
-    impactTags += `<span class="impact-tag fail">⚠ ${c}</span>`;
-  });
-  esc.impact.services.forEach(s => {
-    impactTags += `<span class="impact-tag">📦 ${s}</span>`;
-  });
-
-  const html = `
-    <div class="drawer-header">
-      <div>
-        <span class="urgency-tag ${esc.urgency}">${esc.urgency === 'urgent' ? '🔴 紧急' : '🟡 一般'}</span>
-        <div class="drawer-title">${esc.title}</div>
-        <div class="drawer-subtitle">
-          ${esc.project} · ${esc.service} · ${esc.agent} · 等待 ${esc.waiting}
-        </div>
-      </div>
-      <button class="btn-close" onclick="closeDecisionDrawer()">✕</button>
-    </div>
-
-    <div class="drawer-body">
-      <div class="drawer-section">
-        <h4>📋 背景与上下文</h4>
-        <p>${esc.context.replace(/\n/g, '<br>')}</p>
-      </div>
-
-      <div class="drawer-section">
-        <h4>🔀 可选方案</h4>
-        ${optionsHtml}
-      </div>
-
-      <div class="drawer-section">
-        <h4>🤖 Agent 分析与建议</h4>
-        <div class="reasoning-block">${esc.reasoning}</div>
-      </div>
-
-      <div class="drawer-section">
-        <h4>💥 影响范围</h4>
-        <div class="impact-row">${impactTags}</div>
-        ${esc.impact.cost_estimate ? `<p style="margin-top:10px;font-size:12px;color:var(--text-muted)">📊 ${esc.impact.cost_estimate}</p>` : ''}
-      </div>
-    </div>
-
-    <div class="drawer-footer">
-      ${esc.options.map((opt, i) => `
-        <button class="btn-decision ${opt.recommended ? 'success' : ''}"
-                onclick="makeDecision('${escId}', '${opt.name}')">
-          ✓ ${opt.name}
-        </button>
-      `).join('')}
-      <button class="btn-decision ask" onclick="makeDecision('${escId}', 'ask_more')">
-        💬 需要更多信息
-      </button>
-    </div>
-  `;
-
-  document.getElementById('decisionDrawer').innerHTML = html;
-  document.getElementById('drawerOverlay').classList.add('open');
-  document.getElementById('decisionDrawer').classList.add('open');
-  document.body.style.overflow = 'hidden';
-}
-
-function closeDecisionDrawer() {
-  document.getElementById('drawerOverlay').classList.remove('open');
-  document.getElementById('decisionDrawer').classList.remove('open');
-  document.body.style.overflow = '';
-}
-
-function makeDecision(escId, choice) {
-  const esc = escalations[escId];
-
-  // Update the sidebar item
-  const item = document.getElementById('esc-item-' + escId.split('-')[1]);
-  if (item) {
-    item.classList.remove('urgent', 'normal');
-    item.classList.add('resolved');
-    item.querySelector('.esc-meta').innerHTML = `✅ 已决定 · ${choice} · 刚刚`;
-    item.querySelector('.esc-cta').textContent = '';
-    item.onclick = null;
-  }
-
-  // Update counts
-  updateEscalationCount();
-
-  // Close drawer
-  closeDecisionDrawer();
-
-  // Brief toast (would be a proper notification in production)
-  console.log(`Decision made: ${esc.project} — ${esc.title} → ${choice}`);
-}
-
-function updateEscalationCount() {
-  const pending = document.querySelectorAll('.escalation-item.urgent, .escalation-item.normal').length;
-  document.getElementById('escalationCount').textContent = pending;
-  document.getElementById('inboxBadge').textContent = pending + ' 待处理';
-  if (pending === 0) {
-    document.getElementById('inboxBadge').textContent = '已清空';
-    document.getElementById('inboxBadge').style.background = 'var(--green)';
-  }
-}
-
-// Close drawer with Escape key
-document.addEventListener('keydown', function(e) {
-  if (e.key === 'Escape') closeDecisionDrawer();
-});
-
-// ==========================================================================
-// Project data & detail view
-// ==========================================================================
-const projects = {
-  'tracker-system': {
-    health: 'green', name: 'tracker-system', meta: 'TypeScript · 5 个服务 · 3 个 Agent',
-    description: '全栈资产追踪系统，支持 Web 管理后台与移动端扫码录入。采用 <strong>Express + React Native + PostgreSQL</strong> 技术栈，三个 Agent 并行开发前后端服务。当前处于实现阶段第 4/7 轮，已覆盖核心 CRUD 与认证流程。',
-    descTags: ['Express', 'React Native', 'PostgreSQL', 'Redis'],
-    techdebt: [
-      { id:'TD-01', desc:'tracker-admin 未使用 Repository 模式，Service 层直接调用 Prisma', severity:'low', cause:'早期快速原型未重构', plan:'下个迭代' },
-      { id:'TD-02', desc:'mobile-app API 客户端未统一错误处理，各页面自行 catch', severity:'medium', cause:'多 Agent 并行开发缺乏协调', plan:'2 周内' },
-    ],
-    history: [
-      {
-        id: 'T-TS-010', goal: '搭建项目骨架，配置 DoD、约束检查与 CI 流水线，初始化前后端服务与数据库。',
-        agent: 'agent-2', services: ['tracker-service', 'admin-web', 'postgres'],
-        completed: '3 天前', tasksDone: 6, cost: '128k',
-      },
-      {
-        id: 'T-TS-011', goal: '实现核心 CRUD 与数据模型：资产登记、分类、查询 API，前端管理表格与筛选。',
-        agent: 'agent-2', services: ['tracker-service', 'admin-web', 'postgres'],
-        completed: '2 天前', tasksDone: 8, cost: '210k',
-      },
-      {
-        id: 'T-TS-012', goal: '重构错误处理逻辑，统一 API 错误格式，添加全局异常过滤器与前端 toast 提示。',
-        agent: 'agent-2', services: ['tracker-service', 'admin-web', 'mobile-app'],
-        completed: '1 天前', tasksDone: 5, cost: '95k',
-      },
-      {
-        id: 'T-TS-013', goal: '移动端项目初始化，搭建 React Native 骨架、导航框架与 API 客户端层。',
-        agent: 'agent-1', services: ['mobile-app', 'user-api'],
-        completed: '1 天前', tasksDone: 5, cost: '112k',
-      },
-      {
-        id: 'T-TS-014', goal: '管理后台推送通知基础设施：WebSocket 连接管理、通知队列与模板引擎。',
-        agent: 'agent-3', services: ['admin-web', 'tracker-service', 'redis'],
-        completed: '12 小时前', tasksDone: 7, cost: '156k',
-      },
-    ],
-    iterations: [
-      {
-        id: 'T-TS-001',
-        goal: '实现用户认证与授权中间件，包括 JWT 签发/验证、session 管理、角色权限控制，并通过全部约束检查达到可部署状态。',
-        currentAction: '正在编写认证中间件集成测试',
-        agent: 'agent-2', agentClass: 'a2',
-        services: ['tracker-service', 'admin-web'],
-        meta: '已消耗 45k Token · 约束全部通过',
-        tasks: [
-          { name: 'JWT 签发与验证逻辑', service: 'tracker-service', status: 'done' },
-          { name: '认证中间件集成测试', service: 'tracker-service', status: 'in-progress' },
-          { name: '管理后台登录页适配', service: 'admin-web', status: 'pending' },
-          { name: '覆盖率提升至 85%', service: 'tracker-service', status: 'pending' },
-        ],
-      },
-      {
-        id: 'T-TS-002',
-        goal: '移动端扫码录入页面与生物识别认证集成，保持覆盖率 90% 以上。',
-        currentAction: '正在适配 Android 扫码页面布局',
-        agent: 'agent-1', agentClass: 'a1',
-        services: ['mobile-app', 'user-api'],
-        meta: '已消耗 38k Token · 覆盖率 92%',
-        tasks: [
-          { name: 'iOS 扫码录入页面', service: 'mobile-app', status: 'done' },
-          { name: '生物识别凭证校验 API', service: 'user-api', status: 'done' },
-          { name: 'Android 扫码适配', service: 'mobile-app', status: 'in-progress' },
-        ],
-      },
-      {
-        id: 'T-TS-003',
-        goal: '为管理后台添加推送通知模块，包括模板管理和批量推送功能。',
-        currentAction: '正在实现推送消息队列接口',
-        agent: 'agent-3', agentClass: 'a3',
-        services: ['admin-web', 'tracker-service'],
-        meta: '已消耗 28k Token · lint 警告 1 个',
-        tasks: [
-          { name: '通知模板管理页面', service: 'admin-web', status: 'done' },
-          { name: '推送消息队列接口', service: 'tracker-service', status: 'in-progress' },
-          { name: '安全审计 (audit-ci)', service: 'admin-web', status: 'pending' },
-        ],
-      },
-      {
-        id: 'T-TS-004',
-        goal: '为 PostgreSQL 数据库添加读写分离与连接池优化，降低 tracker-service 查询延迟。',
-        currentAction: '正在配置 PgBouncer 连接池参数',
-        agent: 'agent-2', agentClass: 'a2',
-        services: ['postgres', 'tracker-service'],
-        meta: '已消耗 18k Token · 刚刚启动',
-        tasks: [
-          { name: 'PgBouncer 部署与配置', service: 'postgres', status: 'in-progress' },
-          { name: 'tracker-service 读写分离适配', service: 'tracker-service', status: 'pending' },
-          { name: '连接池性能压测', service: 'postgres', status: 'pending' },
-        ],
-      },
-      {
-        id: 'T-TS-005',
-        goal: '实现 Redis 缓存层：为高频查询 API 添加缓存策略，减少 PostgreSQL 读压力。',
-        currentAction: '正在设计缓存键命名规范',
-        agent: 'agent-3', agentClass: 'a3',
-        services: ['redis', 'tracker-service'],
-        meta: '已消耗 12k Token · 刚刚启动',
-        tasks: [
-          { name: '缓存键设计与命名规范', service: 'redis', status: 'in-progress' },
-          { name: 'tracker-service 缓存中间件', service: 'tracker-service', status: 'pending' },
-          { name: '缓存失效策略与测试', service: 'redis', status: 'pending' },
-        ],
-      },
-    ],
-    topology: `
-      <div class="topology-layer"><span class="topology-label">前端</span>
-        <div class="service-node healthy"><div class="svc-name">📱 mobile-app</div><div class="svc-meta"><span>React Native</span><span>:5180</span></div><span class="svc-agent active">agent-1 运行中</span></div>
-        <div class="service-node healthy"><div class="svc-name">🌐 admin-web</div><div class="svc-meta"><span>Vite + React</span><span>:5173</span></div><span class="svc-agent active">agent-3 运行中</span></div>
-      </div>
-      <div style="text-align:center;color:var(--text-muted)">↓ API Gateway (nginx :8080) ↓</div>
-      <div class="topology-layer"><span class="topology-label">后端</span>
-        <div class="service-node healthy"><div class="svc-name">🔧 tracker-service</div><div class="svc-meta"><span>Express</span><span>:3001</span></div><span class="svc-agent active">agent-2 运行中</span></div>
-        <div class="service-node healthy"><div class="svc-name">🔧 tracker-admin</div><div class="svc-meta"><span>Express</span><span>:3002</span></div><span class="svc-agent idle">空闲</span></div>
-      </div>
-      <div style="text-align:center;color:var(--text-muted)">↓ ↓</div>
-      <div class="topology-layer"><span class="topology-label">数据层</span>
-        <div class="service-node healthy"><div class="svc-name">🗄 PostgreSQL 16</div><div class="svc-meta"><span>:5432</span></div></div>
-        <div class="service-node healthy"><div class="svc-name">📦 Redis 7</div><div class="svc-meta"><span>:6379</span></div></div>
-      </div>`,
-    constraints: [
-      { name: 'no_circular_deps', service: '全局', status: 'pass' },
-      { name: 'layer_dependency', service: '全局', status: 'pass' },
-      { name: 'no_new_deps_without_adr', service: '全局', status: 'pass' },
-      { name: 'api_backward_compat', service: 'tracker-service', status: 'pass' },
-      { name: 'no_raw_sql_in_app', service: '全局', status: 'pass' },
-      { name: 'no_console_in_prod', service: '全局', status: 'warn' },
-      { name: 'public_api_has_test', service: 'tracker-admin', status: 'warn' },
-    ],
-    timeline: [
-      { time: '2 分钟前', desc: '自检通过：全部约束合规', agent: 'agent-2 · tracker-service', type: 'done' },
-      { time: '8 分钟前', desc: '实现了用户认证中间件', agent: 'agent-2 · tracker-service', type: 'done' },
-      { time: '15 分钟前', desc: '正在运行约束检查...', agent: 'agent-1 · mobile-app', type: 'active' },
-      { time: '22 分钟前', desc: '开始任务：添加推送通知模块', agent: 'agent-3 · admin-web', type: 'done' },
-    ],
-    decisions: [
-      { id: 'D-20260607-001', topic: '选择 Repository 模式而非 TypeORM 直连', risk: '低风险', time: '今天' },
-      { id: 'D-20260605-002', topic: '移动端使用 React Native 新架构 (Fabric)', risk: '中风险', time: '2 天前' },
-    ]
-  },
-  'payment-gateway': {
-    health: 'yellow', name: 'payment-gateway', meta: 'Go · 4 个服务 · 2 个 Agent',
-    description: '支付网关服务，负责对接 <strong>Stripe</strong> 支付渠道、账单处理与交易幂等性保障。基于 <strong>Go/Chi</strong> 构建，搭配 MySQL + Redis 存储。当前 billing-worker 存在约束警告，覆盖率 76% 未达标。',
-    descTags: ['Go/Chi', 'MySQL', 'Redis', 'Stripe'],
-    techdebt: [
-      { id:'TD-05', desc:'billing-worker 违反分层依赖：worker 直接 import gateway-api 的 model 包', severity:'high', cause:'赶进度绕过分层约束', plan:'本周内修复', overdue: true },
-      { id:'TD-06', desc:'gateway-api 限流器使用固定窗口算法，高并发下不准确', severity:'medium', cause:'初期简化实现', plan:'下月迁移到 token bucket' },
-      { id:'TD-07', desc:'MySQL 连接池未配置健康检查，偶发断连未自动恢复', severity:'medium', cause:'默认配置未调优', plan:'本周内' },
-      { id:'TD-08', desc:'Stripe webhook 签名验证使用旧版 API，Stripe 将于 Q3 废弃', severity:'high', cause:'API 版本滞后', plan:'本月内迁移', overdue: true },
-      { id:'TD-09', desc:'billing worker 无优雅关闭，kill 信号可能导致重复计费', severity:'high', cause:'初期未考虑生产环境', plan:'紧急修复' },
-    ],
-    history: [
-      {
-        id: 'T-PG-010', goal: '搭建支付网关骨架：Go/Chi 路由、MySQL  schema 设计与 Redis 缓存层。',
-        agent: 'agent-1', services: ['gateway-api', 'mysql', 'redis'],
-        completed: '3 天前', tasksDone: 6, cost: '145k',
-      },
-      {
-        id: 'T-PG-011', goal: '实现支付幂等性机制，使用 Redis 分布式锁防止重复扣款，编写并发测试。',
-        agent: 'agent-1', services: ['gateway-api', 'redis'],
-        completed: '昨天', tasksDone: 4, cost: '98k',
-      },
-      {
-        id: 'T-PG-012', goal: 'billing-worker 账单批处理：定时任务框架、账单聚合与 MySQL 写入优化。',
-        agent: 'agent-2', services: ['billing-worker', 'mysql'],
-        completed: '昨天', tasksDone: 5, cost: '132k',
-      },
-    ],
-    iterations: [
-      {
-        id: 'T-PG-001',
-        goal: '完成 Stripe 支付渠道对接，实现 webhook 处理器与支付幂等性 Redis 锁，并通过 API 向后兼容测试。',
-        currentAction: '正在编写 API 向后兼容性测试',
-        agent: 'agent-1', agentClass: 'a1', num: 3, total: 5,
-        services: ['gateway-api', 'billing-worker', 'redis'],
-        meta: '已消耗 85k Token · 约束全部通过',
-        tasks: [
-          { name: 'Stripe webhook 处理器', service: 'gateway-api', status: 'done' },
-          { name: '支付幂等性 Redis 锁', service: 'gateway-api', status: 'done' },
-          { name: 'API 向后兼容性测试', service: 'gateway-api', status: 'in-progress' },
-        ],
-      },
-      {
-        id: 'T-PG-002',
-        goal: '修复 billing-worker 层依赖违规，实现账单聚合批处理，将覆盖率从 76% 提升至 80%。',
-        currentAction: '等待人工决策：billing 层架构调整方案',
-        agent: 'agent-2', agentClass: 'a2', num: 4, total: 6,
-        services: ['billing-worker'],
-        meta: '已消耗 65k Token · ⚠ 1 个约束警告',
-        tasks: [
-          { name: '账单聚合批处理逻辑', service: 'billing-worker', status: 'done' },
-          { name: '修复 billing 层依赖违规', service: 'billing-worker', status: 'blocked' },
-          { name: '单元测试覆盖率至 80%', service: 'billing-worker', status: 'pending' },
-        ],
-      },
-    ],
-    topology: `
-      <div class="topology-layer"><span class="topology-label">后端</span>
-        <div class="service-node healthy"><div class="svc-name">💳 gateway-api</div><div class="svc-meta"><span>Go/Chi</span><span>:8080</span></div><span class="svc-agent active">agent-1 运行中</span></div>
-        <div class="service-node warning"><div class="svc-name">📊 billing-worker</div><div class="svc-meta"><span>Go</span><span>background</span></div><span class="svc-agent active">agent-2 运行中</span></div>
-      </div>
-      <div style="text-align:center;color:var(--text-muted)">↓ ↓</div>
-      <div class="topology-layer"><span class="topology-label">数据层</span>
-        <div class="service-node healthy"><div class="svc-name">🗄 MySQL 8</div><div class="svc-meta"><span>:3306</span></div></div>
-        <div class="service-node healthy"><div class="svc-name">📦 Redis 7</div><div class="svc-meta"><span>:6379</span></div></div>
-      </div>`,
-    constraints: [
-      { name: 'no_circular_deps', service: '全局', status: 'pass' },
-      { name: 'layer_dependency', service: '全局', status: 'warn' },
-      { name: 'no_new_deps_without_adr', service: 'billing-worker', status: 'fail' },
-      { name: 'api_backward_compat', service: 'gateway-api', status: 'pass' },
-    ],
-    timeline: [
-      { time: '5 分钟前', desc: '约束警告：billing 层违规', agent: 'agent-2', type: 'error' },
-      { time: '15 分钟前', desc: '实现了 Stripe webhook 处理器', agent: 'agent-1', type: 'done' },
-      { time: '40 分钟前', desc: '自检失败：覆盖率 72% < 80%', agent: 'agent-2', type: 'error' },
-    ],
-    decisions: [
-      { id: 'D-20260606-003', topic: '选择 goroutine pool 而非无限制 spawn', risk: '中风险', time: '昨天' },
-      { id: 'D-20260604-001', topic: '支付幂等性使用 Redis 锁而非 DB 唯一约束', risk: '中风险', time: '3 天前' },
-    ]
-  },
-  'user-mobile': {
-    health: 'green', name: 'user-mobile', meta: 'React Native · 4 个服务 · 2 个 Agent',
-    description: '移动端用户应用，覆盖 <strong>iOS 与 Android</strong> 双平台。按平台独立实现导航层，共享业务逻辑与状态管理（<strong>Zustand</strong>）。集成生物识别认证、用户资料编辑等核心功能，覆盖率 92%。',
-    descTags: ['React Native', 'Express', 'PostgreSQL', 'Zustand'],
-    techdebt: [],
-    history: [
-      {
-        id: 'T-UM-010', goal: 'React Native 项目初始化，配置 Zustand 状态管理、API 客户端与导航框架。',
-        agent: 'agent-1', services: ['mobile-app', 'user-api'],
-        completed: '3 天前', tasksDone: 5, cost: '98k',
-      },
-      {
-        id: 'T-UM-011', goal: '用户注册与登录流程：手机号验证、OAuth 第三方登录、session 持久化。',
-        agent: 'agent-1', services: ['mobile-app', 'user-api', 'postgres'],
-        completed: '2 天前', tasksDone: 7, cost: '176k',
-      },
-      {
-        id: 'T-UM-012', goal: '用户微服务 API 基础 CRUD：用户资料、头像上传、搜索与分页接口。',
-        agent: 'agent-2', services: ['user-api', 'postgres'],
-        completed: '昨天', tasksDone: 4, cost: '85k',
-      },
-    ],
-    iterations: [
-      {
-        id: 'T-UM-001',
-        goal: '为 iOS 和 Android 实现平台独立导航（Tab Bar / Navigation Rail），共享业务逻辑层，集成生物识别认证与用户资料编辑。',
-        currentAction: '正在实现 iOS Tab Bar 导航动画',
-        agent: 'agent-1', agentClass: 'a1', num: 4, total: 7,
-        services: ['mobile-app', 'user-api'],
-        meta: '已消耗 44k Token · 覆盖率 92%',
-        tasks: [
-          { name: '生物识别认证页面', service: 'mobile-app', status: 'done' },
-          { name: '用户资料编辑页面', service: 'mobile-app', status: 'done' },
-          { name: 'iOS Tab Bar 导航组件', service: 'mobile-app', status: 'in-progress' },
-          { name: 'Android Navigation Rail', service: 'mobile-app', status: 'pending' },
-          { name: '导航共享业务逻辑层', service: 'mobile-app', status: 'pending' },
-          { name: '用户搜索与分页 API', service: 'user-api', status: 'in-progress' },
-        ],
-      },
-      {
-        id: 'T-UM-002',
-        goal: '用户微服务 API 扩展：生物识别凭证校验、用户搜索与分页，完成集成测试。',
-        currentAction: '正在编写用户搜索与分页接口',
-        agent: 'agent-2', agentClass: 'a2', num: 2, total: 4,
-        services: ['user-api'],
-        meta: '已消耗 35k Token · 约束全部通过',
-        tasks: [
-          { name: '生物识别凭证校验 API', service: 'user-api', status: 'done' },
-          { name: '用户搜索与分页接口', service: 'user-api', status: 'in-progress' },
-          { name: 'API 集成测试', service: 'user-api', status: 'pending' },
-        ],
-      },
-    ],
-    topology: `
-      <div class="topology-layer"><span class="topology-label">前端</span>
-        <div class="service-node healthy"><div class="svc-name">🍎 iOS-app</div><div class="svc-meta"><span>React Native</span></div><span class="svc-agent active">agent-1 运行中</span></div>
-        <div class="service-node healthy"><div class="svc-name">🤖 Android-app</div><div class="svc-meta"><span>React Native</span></div><span class="svc-agent idle">空闲</span></div>
-      </div>
-      <div style="text-align:center;color:var(--text-muted)">↓</div>
-      <div class="topology-layer"><span class="topology-label">后端</span>
-        <div class="service-node healthy"><div class="svc-name">👤 user-api</div><div class="svc-meta"><span>Express</span><span>:3003</span></div><span class="svc-agent active">agent-2 运行中</span></div>
-      </div>
-      <div style="text-align:center;color:var(--text-muted)">↓</div>
-      <div class="topology-layer"><span class="topology-label">数据层</span>
-        <div class="service-node healthy"><div class="svc-name">🗄 PostgreSQL 16</div><div class="svc-meta"><span>:5432</span></div></div>
-      </div>`,
-    constraints: [
-      { name: 'no_circular_deps', service: '全局', status: 'pass' },
-      { name: 'layer_dependency', service: '全局', status: 'pass' },
-      { name: 'api_backward_compat', service: 'user-api', status: 'pass' },
-    ],
-    timeline: [
-      { time: '8 分钟前', desc: '自检通过：覆盖率 92%', agent: 'agent-1', type: 'done' },
-      { time: '20 分钟前', desc: '实现了生物识别认证页', agent: 'agent-1', type: 'done' },
-      { time: '35 分钟前', desc: '正在运行集成测试...', agent: 'agent-2', type: 'active' },
-    ],
-    decisions: [
-      { id: 'D-20260606-001', topic: '移动端状态管理选择 Zustand 而非 Redux', risk: '低风险', time: '昨天' },
-    ]
-  },
-  'data-pipeline': {
-    health: 'red', name: 'data-pipeline', meta: 'Python · 4 个服务 · 1 个 Agent 阻塞 · 1 个升级',
-    description: '实时数据处理管道，基于 <strong>Python/Airflow</strong> 进行 ETL 调度，搭配 <strong>ClickHouse</strong> 作为 OLAP 存储。stream-processor 服务因消息队列选型（Kafka vs Redis Streams）触发升级事件，Agent-3 当前处于阻塞状态等待人工决策。',
-    descTags: ['Python', 'Airflow', 'ClickHouse', 'Kafka/Redis Streams'],
-    techdebt: [
-      { id:'TD-10', desc:'stream-processor 绕过 Repository 直连 ClickHouse', severity:'high', cause:'等待 MQ 选型期间未遵循模式', plan:'选型完成后重构', overdue: true },
-      { id:'TD-11', desc:'etl-worker 使用 print() 而非结构化日志，无日志级别', severity:'high', cause:'快速原型阶段', plan:'本周内' },
-      { id:'TD-12', desc:'Airflow DAG 无重试和告警机制，任务失败静默丢失', severity:'high', cause:'初期未配置', plan:'本周内修复', overdue: true },
-      { id:'TD-13', desc:'ClickHouse 连接使用默认用户+无密码', severity:'high', cause:'开发环境配置带入', plan:'紧急修复' },
-      { id:'TD-14', desc:'批量写入未使用 ClickHouse 物化视图，查询性能退化', severity:'medium', cause:'初期不了解 ClickHouse 特性', plan:'下个迭代' },
-      { id:'TD-15', desc:'stream-processor 无背压控制，高峰期可能 OOM', severity:'medium', cause:'待 MQ 选型后统一处理', plan:'选型后 1 周' },
-      { id:'TD-16', desc:'etl-worker 与 stream-processor 共用一个 ClickHouse 连接池', severity:'low', cause:'初期简化', plan:'有空优化' },
-      { id:'TD-17', desc:'代码中 Python 依赖版本未锁定，CI 偶发版本冲突', severity:'medium', cause:'未使用 pip freeze', plan:'本周内' },
-    ],
-    history: [
-      {
-        id: 'T-DP-010', goal: '搭建数据管道骨架：Airflow 部署、ClickHouse 集群初始化与 Python ETL 框架。',
-        agent: 'agent-3', services: ['etl-worker', 'clickhouse'],
-        completed: '4 天前', tasksDone: 6, cost: '185k',
-      },
-      {
-        id: 'T-DP-011', goal: 'ETL 数据摄取：从多个数据源（API、CSV、DB dump）批量导入 ClickHouse，编写数据校验脚本。',
-        agent: 'agent-3', services: ['etl-worker', 'clickhouse'],
-        completed: '2 天前', tasksDone: 5, cost: '220k',
-      },
-      {
-        id: 'T-DP-012', goal: 'stream-processor 原型验证：基于 Redis Streams 实现最小可行流处理管道与延迟测试。',
-        agent: 'agent-3', services: ['stream-processor', 'redis', 'clickhouse'],
-        completed: '昨天', tasksDone: 4, cost: '168k',
-      },
-    ],
-    iterations: [
-      {
-        id: 'T-DP-001',
-        goal: '实现实时流处理管道：消息队列集成、流数据消费逻辑与 ClickHouse 入库。当前因 MQ 选型升级事件阻塞。',
-        currentAction: '等待人工决策：Kafka vs Redis Streams 选型',
-        agent: 'agent-3', agentClass: 'a3', num: 3, total: 6,
-        services: ['stream-processor', 'clickhouse', 'MQ 待定'],
-        meta: '已消耗 200k Token · 🔴 1 个升级事件阻塞',
-        tasks: [
-          { name: 'stream-processor 骨架搭建', service: 'stream-processor', status: 'done' },
-          { name: 'ClickHouse 表结构与迁移', service: 'clickhouse', status: 'done' },
-          { name: '消息队列选型 (Kafka vs Redis)', service: 'MQ 待定', status: 'blocked' },
-          { name: '流处理器核心消费逻辑', service: 'stream-processor', status: 'pending' },
-          { name: '端到端集成测试', service: 'stream-processor', status: 'pending' },
-        ],
-      },
-      {
-        id: 'T-DP-002',
-        goal: '实现 Airflow DAG ETL 调度、ClickHouse 批量写入与数据质量校验规则。',
-        currentAction: '正在编写数据质量校验规则',
-        agent: 'agent-3', agentClass: 'a3', num: 1, total: 4,
-        services: ['etl-worker', 'clickhouse'],
-        meta: '已消耗 58k Token · 等待 stream-processor 就绪',
-        tasks: [
-          { name: 'Airflow DAG 编排', service: 'etl-worker', status: 'done' },
-          { name: 'ClickHouse 批量写入', service: 'clickhouse', status: 'done' },
-          { name: '数据质量校验规则', service: 'etl-worker', status: 'in-progress' },
-          { name: 'DAG 集成测试', service: 'etl-worker', status: 'pending' },
-        ],
-      },
-    ],
-    topology: `
-      <div class="topology-layer"><span class="topology-label">后端</span>
-        <div class="service-node healthy"><div class="svc-name">⚙️ etl-worker</div><div class="svc-meta"><span>Python/Airflow</span></div><span class="svc-agent idle">空闲</span></div>
-        <div class="service-node critical"><div class="svc-name">🌊 stream-processor</div><div class="svc-meta"><span>Python</span></div><span class="svc-agent blocked">agent-3 已阻塞</span></div>
-      </div>
-      <div style="text-align:center;color:var(--text-muted)">↓ ↓</div>
-      <div class="topology-layer"><span class="topology-label">数据层</span>
-        <div class="service-node healthy"><div class="svc-name">🗄 ClickHouse</div><div class="svc-meta"><span>:8123</span></div></div>
-        <div class="service-node critical"><div class="svc-name">❓ MQ 待定</div><div class="svc-meta"><span>等待决策</span></div></div>
-      </div>`,
-    constraints: [
-      { name: 'no_circular_deps', service: '全局', status: 'pass' },
-      { name: 'no_new_deps_without_adr', service: 'stream-processor', status: 'fail' },
-      { name: 'layer_dependency', service: '全局', status: 'warn' },
-    ],
-    timeline: [
-      { time: '2 小时 34 分钟前', desc: '升级事件：需要选择消息队列方案', agent: 'agent-3', type: 'error' },
-      { time: '3 小时前', desc: '约束失败：引入新依赖未记录 ADR', agent: 'agent-3', type: 'error' },
-      { time: '4 小时前', desc: '开始任务：实现实时流处理 pipeline', agent: 'agent-3', type: 'done' },
-    ],
-    decisions: [
-      { id: 'D-20260606-004', topic: 'ETL 调度选择 Airflow 而非 Prefect', risk: '中风险', time: '昨天' },
-    ]
-  }
-};
-
+// ===================================================================
+// TOGGLE ITERATION DETAIL
+// ===================================================================
 function toggleIterDetail(idx) {
   const row = document.getElementById('iter-row-' + idx);
   const detail = document.getElementById('detail-row-' + idx);
   if (!row || !detail) return;
   const isOpen = detail.classList.contains('open');
-  // Close all others first
   document.querySelectorAll('.detail-row.open').forEach(r => r.classList.remove('open'));
   document.querySelectorAll('.iter-row.expanded').forEach(r => r.classList.remove('expanded'));
-  if (!isOpen) {
-    detail.classList.add('open');
-    row.classList.add('expanded');
-  }
+  if (!isOpen) { detail.classList.add('open'); row.classList.add('expanded'); }
 }
 
-// ==========================================================================
-// History Modal — paginated historical iterations
-// ==========================================================================
-let historyState = { projectId: null, page: 0, perPage: 4 };
+// ===================================================================
+// HISTORY MODAL
+// ===================================================================
+let historyState = { page: 0, perPage: 4 };
 
 function openHistoryModal() {
-  const p = projects[historyState.projectId];
-  if (!p || !p.history || p.history.length === 0) {
-    alert('该项目暂无历史迭代记录');
-    return;
-  }
+  const history = window._currentHistory || [];
+  if (history.length === 0) { alert('暂无历史迭代记录'); return; }
   historyState.page = 0;
-  document.getElementById('history-project-name').textContent = p.name;
+  const p = projectsData[historyState.projectId || Object.keys(projectsData)[0]];
+  document.getElementById('history-project-name').textContent = p ? p.name : '';
   renderHistoryPage();
   document.getElementById('historyOverlay').classList.add('open');
   document.body.style.overflow = 'hidden';
@@ -2379,289 +1801,161 @@ function closeHistoryModal() {
 }
 
 function renderHistoryPage() {
-  const p = projects[historyState.projectId];
-  const history = p.history || [];
+  const history = window._currentHistory || [];
   const totalPages = Math.ceil(history.length / historyState.perPage);
   const start = historyState.page * historyState.perPage;
   const pageItems = history.slice(start, start + historyState.perPage);
 
   let bodyHtml = '';
-  if (pageItems.length === 0) {
-    bodyHtml = '<div class="history-empty">该页无记录</div>';
-  } else {
-    pageItems.forEach(h => {
-      const svcTags = (h.services || []).map(s => `<span class="hi-svc-tag">${s}</span>`).join(' ');
-      bodyHtml += `<div class="history-item">
-        <div class="hi-head">
-          <span class="hi-id">${h.id}</span>
-          <span class="hi-agent">${h.agent}</span>
-          <span class="hi-date">✅ ${h.completed}</span>
-        </div>
-        <div class="hi-goal">${h.goal}</div>
-        <div class="hi-meta">
-          <span>📋 ${h.tasksDone} 个子任务</span><span>⏣ ${h.cost}</span>
-          <span>${svcTags}</span>
-        </div>
-      </div>`;
-    });
-  }
-  document.getElementById('history-modal-body').innerHTML = bodyHtml;
+  pageItems.forEach(h => {
+    const svcTags = (h.services || []).map(s => '<span class="hi-svc-tag">' + s + '</span>').join(' ');
+    bodyHtml += '<div class="history-item"><div class="hi-head"><span class="hi-id">' + h.id + '</span>' +
+      '<span class="hi-agent">' + (h.agent || '') + '</span><span class="hi-date">✅ ' + (h.completed || '') + '</span></div>' +
+      '<div class="hi-goal">' + h.goal + '</div><div class="hi-meta"><span>📋 ' + (h.tasksDone || 0) + ' 个子任务</span>' +
+      '<span>⏣ ' + (h.cost || '') + '</span><span>' + svcTags + '</span></div></div>';
+  });
+  document.getElementById('history-modal-body').innerHTML = bodyHtml || '<div class="history-empty">该页无记录</div>';
 
-  // Pager
-  document.getElementById('history-pager').innerHTML = `
-    <button onclick="historyState.page=0;renderHistoryPage()" ${historyState.page===0?'disabled':''}>« 首页</button>
-    <button onclick="historyState.page=Math.max(0,historyState.page-1);renderHistoryPage()" ${historyState.page===0?'disabled':''}>‹ 上一页</button>
-    <span class="page-info">${historyState.page+1} / ${totalPages}</span>
-    <button onclick="historyState.page=Math.min(totalPages-1,historyState.page+1);renderHistoryPage()" ${historyState.page>=totalPages-1?'disabled':''}>下一页 ›</button>
-    <button onclick="historyState.page=totalPages-1;renderHistoryPage()" ${historyState.page>=totalPages-1?'disabled':''}>末页 »</button>
-  `;
+  document.getElementById('history-pager').innerHTML =
+    '<button onclick="historyState.page=0;renderHistoryPage()" ' + (historyState.page === 0 ? 'disabled' : '') + '>« 首页</button>' +
+    '<button onclick="historyState.page=Math.max(0,historyState.page-1);renderHistoryPage()" ' + (historyState.page === 0 ? 'disabled' : '') + '>‹ 上一页</button>' +
+    '<span class="page-info">' + (historyState.page + 1) + ' / ' + (totalPages || 1) + '</span>' +
+    '<button onclick="historyState.page=Math.min(totalPages-1,historyState.page+1);renderHistoryPage()" ' + (historyState.page >= totalPages - 1 ? 'disabled' : '') + '>下一页 ›</button>' +
+    '<button onclick="historyState.page=totalPages-1;renderHistoryPage()" ' + (historyState.page >= totalPages - 1 ? 'disabled' : '') + '>末页 »</button>';
 }
 
-// Close history modal with Escape
+// ===================================================================
+// DECISION DRAWER
+// ===================================================================
+function openDecisionFromData(decId) {
+  const projId = historyState.projectId || Object.keys(projectsData)[0];
+  api('/projects/' + projId).then(res => {
+    if (!res.success) return;
+    const decisions = res.data.decisions || [];
+    const d = decisions.find(dd => dd.id === decId);
+    if (!d) return;
+    openDecisionDrawerWithData(d);
+  });
+}
+
+function openDecisionDrawerWithData(d) {
+  let optsHtml = '';
+  (d.options || []).forEach(opt => {
+    optsHtml += '<div class="option-card' + (opt.recommended ? ' recommended' : '') + '">' +
+      '<h5>' + opt.name + '</h5><div class="pros-cons"><div class="pros">' + (opt.pros || []).join('<br>') + '</div>' +
+      '<div class="cons">' + (opt.cons || []).join('<br>') + '</div></div></div>';
+  });
+
+  document.getElementById('decisionDrawer').innerHTML =
+    '<div class="drawer-header"><div><span class="urgency-tag ' + (d.urgency || 'normal') + '">' + (d.urgency === 'urgent' ? '🔴 紧急' : '🟡 一般') + '</span>' +
+    '<div class="drawer-title">' + d.topic + '</div><div class="drawer-subtitle">' + (d.type || '') + ' · ' + (d.status === 'pending' ? '⏳ 等待决策' : '✅ 已解决') + '</div></div>' +
+    '<button class="btn-close" onclick="closeDecisionDrawer()">✕</button></div>' +
+    '<div class="drawer-body"><div class="drawer-section"><h4>📋 背景</h4><p>' + (d.context || '').replace(/\n/g, '<br>') + '</p></div>' +
+    '<div class="drawer-section"><h4>🔀 可选方案</h4>' + optsHtml + '</div></div>' +
+    (d.status === 'pending' ?
+      '<div class="drawer-footer">' + (d.options || []).map(opt =>
+        '<button class="btn-decision' + (opt.recommended ? ' success' : '') + '" onclick="resolveDecisionAPI(\'' + d.id + '\',\'' + opt.name + '\')">✓ ' + opt.name + '</button>'
+      ).join('') + '<button class="btn-decision" onclick="closeDecisionDrawer()">稍后决定</button></div>'
+    : '');
+
+  document.getElementById('drawerOverlay').classList.add('open');
+  document.getElementById('decisionDrawer').classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+
+function closeDecisionDrawer() {
+  document.getElementById('drawerOverlay').classList.remove('open');
+  document.getElementById('decisionDrawer').classList.remove('open');
+  document.body.style.overflow = '';
+}
+
+async function resolveDecisionAPI(decId, chosen) {
+  await api('/decisions/' + decId + '/resolve', {
+    method: 'POST',
+    body: JSON.stringify({ chosen })
+  });
+  closeDecisionDrawer();
+  updateEscalationBadge();
+  alert('已选择：' + chosen + '\n\nAgent 将收到决策结果并继续迭代。');
+}
+
+async function updateEscalationBadge() {
+  try {
+    const res = await api('/decisions/pending');
+    if (res.success) {
+      const count = res.data.length;
+      document.getElementById('escalationCount').textContent = count;
+      document.getElementById('inboxBadge').textContent = count === 0 ? '已清空' : count + ' 待处理';
+    }
+  } catch {}
+}
+
+// ===================================================================
+// TECH DEBT / CROSS DEPS / STANDARDS VIEWS (from API)
+// ===================================================================
+async function renderTechDebtView() {
+  try {
+    const res = await api('/tech-debts');
+    if (!res.success) return;
+    const sevLabel = { high: '🔴 高', medium: '🟡 中', low: '⚪ 低' };
+    document.getElementById('debt-tbody').innerHTML = res.data.map(d => {
+      const p = projectsData[d.projectId];
+      return '<tr><td style="font-family:var(--font-mono);font-size:11px;color:var(--blue)">' + d.id + '</td>' +
+        '<td>' + d.description + (d.overdue ? '<span class="debt-overdue">逾期</span>' : '') + '</td>' +
+        '<td>' + (p ? p.name : d.projectId) + '</td>' +
+        '<td><span class="debt-severity ' + d.severity + '">' + (sevLabel[d.severity] || d.severity) + '</span></td>' +
+        '<td style="font-size:11px;color:var(--text-muted)">' + (d.cause || '') + '</td>' +
+        '<td style="font-size:11px">' + (d.plan || '') + '</td></tr>';
+    }).join('');
+  } catch {}
+}
+
+async function renderCrossDepsView() {
+  try {
+    const res = await api('/cross-deps');
+    if (!res.success) return;
+    const riskLabel = { high: '高风险', medium: '中风险', low: '低风险' };
+    document.getElementById('dep-list').innerHTML = res.data.map(d =>
+      '<div class="dep-item"><div class="dep-head">' +
+      '<span class="dep-from">' + d.fromProject + '/' + d.fromService + '</span>' +
+      '<span class="dep-arrow">→</span>' +
+      '<span class="dep-to">' + d.toProject + '/' + d.toService + '</span>' +
+      '<span class="dep-type">' + d.depType + '</span>' +
+      '<span class="dep-risk ' + d.risk + '">' + (riskLabel[d.risk] || d.risk) + '</span>' +
+      '</div><div class="dep-impact">' + d.impactDesc + '</div></div>'
+    ).join('');
+  } catch {}
+}
+
+async function renderStandardsView() {
+  try {
+    const res = await api('/standards');
+    if (!res.success) return;
+    const projectIds = Object.keys(projectsData);
+    document.getElementById('standards-tbody').innerHTML = res.data.map(s => {
+      let cells = '';
+      projectIds.forEach(pid => {
+        const v = s.projects[pid] || '—';
+        const cls = v === '—' ? 'st-critical' : v !== s.latestVersion ? 'st-behind' : 'st-ok';
+        cells += '<td class="' + cls + '"><span class="st-version">' + v + '</span></td>';
+      });
+      return '<tr><td>' + s.name + '</td><td><span class="st-version st-ok">' + s.latestVersion + '</span></td>' + cells + '</tr>';
+    }).join('');
+  } catch {}
+}
+
+// ===================================================================
+// ESCAPE KEY
+// ===================================================================
 document.addEventListener('keydown', function(e) {
-  if (e.key === 'Escape' && document.getElementById('historyOverlay').classList.contains('open')) {
-    closeHistoryModal();
+  if (e.key === 'Escape') {
+    closeDecisionDrawer();
+    if (document.getElementById('historyOverlay').classList.contains('open')) closeHistoryModal();
   }
 });
 
-// ===================================================================
-// ARCHITECT DATA & VIEWS
-// ===================================================================
-const crossProjectDeps = [
-  { from:'tracker-service', fromProject:'tracker-system', to:'user-api', toProject:'user-mobile', type:'API 调用', risk:'medium', impact:'tracker 的用户认证依赖 user-api 的 JWT 校验接口。如果 user-api 变更认证方式，tracker 需同步适配。' },
-  { from:'tracker-service', fromProject:'tracker-system', to:'redis', toProject:'shared', type:'共享资源', risk:'low', impact:'tracker 与 payment 共享 Redis 实例，需注意 key 命名空间隔离。' },
-  { from:'admin-web', fromProject:'tracker-system', to:'tracker-service', toProject:'tracker-system', type:'API 调用', risk:'low', impact:'项目内依赖，无跨项目风险。' },
-  { from:'gateway-api', fromProject:'payment-gateway', to:'redis', toProject:'shared', type:'共享资源', risk:'medium', impact:'与 tracker 共享 Redis。payment 的幂等性 key 必须与 tracker 的缓存 key 命名空间隔离。当前已隔离。' },
-  { from:'billing-worker', fromProject:'payment-gateway', to:'gateway-api', toProject:'payment-gateway', type:'反向依赖', risk:'high', impact:'billing-worker 直接依赖 gateway-api 的 model 包，违反分层。这是 TD-05 的技术债根源。修改 gateway-api 的数据模型会直接破坏 billing-worker。' },
-  { from:'stream-processor', fromProject:'data-pipeline', to:'clickhouse', toProject:'shared', type:'共享资源', risk:'medium', impact:'stream-processor 和 etl-worker 共享 ClickHouse 连接池，无隔离。高峰期可能互相影响（TD-16）。' },
-  { from:'mobile-app', fromProject:'user-mobile', to:'user-api', toProject:'user-mobile', type:'API 调用', risk:'low', impact:'项目内依赖。mobile-app 的用户操作全部通过 user-api，架构合理。' },
-  { from:'etl-worker', fromProject:'data-pipeline', to:'clickhouse', toProject:'shared', type:'共享资源', risk:'medium', impact:'参见 stream-processor 依赖。' },
-];
-
-const orgStandards = [
-  { name:'API 设计规范', latest:'v2.1', projects:{'tracker-system':'v2.1','payment-gateway':'v1.8','user-mobile':'v2.1','data-pipeline':'v1.5'} },
-  { name:'数据库访问规范', latest:'v2.0', projects:{'tracker-system':'v2.0','payment-gateway':'v2.0','user-mobile':'v2.0','data-pipeline':'v1.0'} },
-  { name:'日志规范', latest:'v1.3', projects:{'tracker-system':'v1.3','payment-gateway':'v1.3','user-mobile':'v1.3','data-pipeline':'v0.5'} },
-  { name:'错误处理规范', latest:'v1.2', projects:{'tracker-system':'v1.2','payment-gateway':'v1.2','user-mobile':'v1.2','data-pipeline':'v1.0'} },
-  { name:'认证授权规范', latest:'v2.0', projects:{'tracker-system':'v2.0','payment-gateway':'v1.5','user-mobile':'v2.0','data-pipeline':'—'} },
-];
-
-function renderTechDebtView() {
-  let allDebt = [];
-  Object.keys(projects).forEach(k => {
-    (projects[k].techdebt||[]).forEach(d => { allDebt.push({...d, project:projects[k].name}); });
-  });
-  const sevLabel = {high:'🔴 高',medium:'🟡 中',low:'⚪ 低'};
-  document.getElementById('debt-tbody').innerHTML = allDebt.map(d =>
-    `<tr><td style="font-family:var(--font-mono);font-size:11px;color:var(--blue)">${d.id}</td><td>${d.desc}${d.overdue?'<span class="debt-overdue">逾期</span>':''}</td><td>${d.project}</td><td><span class="debt-severity ${d.severity}">${sevLabel[d.severity]}</span></td><td style="font-size:11px;color:var(--text-muted)">${d.cause}</td><td style="font-size:11px">${d.plan}</td></tr>`
-  ).join('');
-}
-
-function renderCrossDepsView() {
-  const riskLabel = {high:'高风险',medium:'中风险',low:'低风险'};
-  document.getElementById('dep-list').innerHTML = crossProjectDeps.map(d =>
-    `<div class="dep-item">
-      <div class="dep-head">
-        <span class="dep-from">${d.fromProject}/${d.from}</span>
-        <span class="dep-arrow">→</span>
-        <span class="dep-to">${d.toProject}/${d.to}</span>
-        <span class="dep-type">${d.type}</span>
-        <span class="dep-risk ${d.risk}">${riskLabel[d.risk]}</span>
-      </div>
-      <div class="dep-impact">${d.impact}</div>
-    </div>`
-  ).join('');
-}
-
-function renderStandardsView() {
-  const rowClass = v => {
-    if (v==='—') return 'st-critical';
-    const parts = v.split('.'); const latest = orgStandards[0]?.latest?.split('.');
-    return 'st-ok'; // simplified
-  };
-  document.getElementById('standards-tbody').innerHTML = orgStandards.map(s => {
-    let cells = ''; Object.keys(s.projects).forEach(k => {
-      const v = s.projects[k]; const cls = v==='—'?'st-critical':v!==s.latest?'st-behind':'st-ok';
-      cells += `<td class="${cls}"><span class="st-version">${v}</span></td>`;
-    });
-    return `<tr><td>${s.name}</td><td><span class="st-version st-ok">${s.latest}</span></td>${cells}</tr>`;
-  }).join('');
-}
-
-// Render tech debt in project detail
-function renderProjectTechDebt(projectId) {
-  const p = projects[projectId]; const debts = p.techdebt || [];
-  if (debts.length === 0) {
-    document.getElementById('detail-techdebt').innerHTML = '<div style="text-align:center;color:var(--text-muted);font-size:12px;padding:20px">✅ 该项目暂无技术债</div>';
-    return;
-  }
-  const sevLabel = {high:'🔴 高',medium:'🟡 中',low:'⚪ 低'};
-  document.getElementById('detail-techdebt').innerHTML = `<table class="debt-table" style="margin:0"><thead><tr><th>ID</th><th>描述</th><th>严重</th><th>产生原因</th><th>偿还计划</th></tr></thead><tbody>${debts.map(d =>
-    `<tr><td style="font-family:var(--font-mono);font-size:11px;color:var(--blue)">${d.id}</td><td>${d.desc}${d.overdue?'<span class="debt-overdue">逾期</span>':''}</td><td><span class="debt-severity ${d.severity}">${sevLabel[d.severity]}</span></td><td style="font-size:11px;color:var(--text-muted)">${d.cause}</td><td style="font-size:11px">${d.plan}</td></tr>`
-  ).join('')}</tbody></table>`;
-}
-
-// Hook into showView for architect views
-const origShowView = showView;
-showView = function(view) {
-  origShowView(view);
-  if (view === 'techdebt') renderTechDebtView();
-  else if (view === 'crossdeps') renderCrossDepsView();
-  else if (view === 'standards') renderStandardsView();
-};
-
-function showProjectDetail(projectId) {
-  // Store for history modal
-  historyState.projectId = projectId;
-  const p = projects[projectId];
-  if (!p) return;
-  document.getElementById('detail-health').className = 'card-health ' + p.health;
-  document.getElementById('detail-name').textContent = p.name;
-  document.getElementById('detail-meta').textContent = p.meta;
-
-  // Render project description
-  const descEl = document.getElementById('detail-description');
-  if (p.description) {
-    descEl.classList.remove('hidden');
-    document.getElementById('detail-desc-text').innerHTML = p.description;
-    const tagsEl = document.getElementById('detail-desc-tags');
-    tagsEl.innerHTML = (p.descTags || []).map(t => `<span class="desc-tag">${t}</span>`).join('');
-  } else {
-    descEl.classList.add('hidden');
-  }
-
-  // Render iteration task board — task-centric table with expandable rows
-  const iterEl = document.getElementById('detail-iter-board');
-  const iterations = p.iterations;
-  if (iterations && iterations.length > 0) {
-    iterEl.classList.remove('hidden');
-    const iterCount = iterations.length;
-    const countEl = document.getElementById('detail-iter-count');
-    countEl.textContent = `${iterCount} 个任务`;
-    countEl.classList.toggle('warn', iterCount > 4);
-
-    // Concurrency warning
-    const warnEl = document.getElementById('concurrency-warn');
-    if (iterCount > 4) {
-      warnEl.classList.remove('hidden');
-      document.getElementById('concurrency-warn-text').innerHTML =
-        `<strong>并行任务过多（${iterCount} 个 > 建议上限 4 个）</strong>，代码冲突与 Agent 上下文切换风险显著升高。建议等待部分任务完成后，再启动新迭代。`;
-    } else {
-      warnEl.classList.add('hidden');
-    }
-
-    // Show/hide history button
-    const histBtn = document.querySelector('#detail-iter-board .btn-back');
-    if (histBtn) histBtn.style.display = (p.history && p.history.length > 0) ? '' : 'none';
-
-    const SI = { 'done': '✓', 'in-progress': '◉', 'pending': '○', 'blocked': '⏸' };
-    let rowsHtml = '';
-    iterations.forEach((iter, idx) => {
-      const tasks = iter.tasks || [];
-      const doneCount = tasks.filter(t => t.status === 'done').length;
-      const totalCount = tasks.length;
-      const frac = totalCount > 0 ? `${doneCount}/${totalCount}` : '—';
-      let fillClass = '';
-      if (totalCount > 0) {
-        if (tasks.some(t => t.status === 'blocked')) fillClass = 'danger';
-        else if (doneCount / totalCount < 0.5) fillClass = 'warn';
-      }
-      const pctWidth = totalCount > 0 ? (doneCount / totalCount * 100) : 0;
-      const goalSummary = iter.goal.length > 45 ? iter.goal.slice(0, 45) + '...' : iter.goal;
-
-      // Determine if blocked for action dot styling
-      const isBlocked = tasks.some(t => t.status === 'blocked');
-      const actionDotClass = isBlocked ? 'blocked' : '';
-      const actionText = iter.currentAction || '—';
-
-      // Main row
-      rowsHtml += `<tr class="iter-row" id="iter-row-${idx}" onclick="toggleIterDetail(${idx})">
-        <td class="col-id"><span class="task-id-cell">${iter.id || '—'}</span></td>
-        <td class="col-goal"><span class="goal-cell-title" title="${iter.goal.replace(/"/g, '&quot;')}">${goalSummary}</span></td>
-        <td class="col-action"><span class="action-cell"><span class="action-dot ${actionDotClass}"></span>${actionText}</span></td>
-        <td class="col-agent"><span class="agent-badge-cell ${iter.agentClass || ''}">${iter.agent}</span></td>
-        <td class="col-prog"><span class="prog-cell"><span class="prog-bar-mini"><span class="fill ${fillClass}" style="width:${pctWidth}%"></span></span><span class="prog-frac">${frac}</span></span></td>
-        <td class="col-expand"><span class="expand-icon">▶</span></td>
-      </tr>`;
-
-      // Service tags for detail
-      const svcTags = (iter.services || []).map(s => `<span class="svc-tag-detail">${s}</span>`).join('');
-
-      // Detail row
-      let tasksHtml = '';
-      tasks.forEach(t => {
-        tasksHtml += `<div class="detail-task ${t.status}">
-          <span class="dt-status ${t.status}">${SI[t.status] || '○'}</span>
-          <span class="dt-name">${t.name}</span>
-          <span class="dt-svc">${t.service || ''}</span>
-        </div>`;
-      });
-      rowsHtml += `<tr class="detail-row" id="detail-row-${idx}"><td colspan="6">
-        <div class="detail-block">
-          <div class="detail-goal">${iter.goal}</div>
-          <div class="svc-tags">${svcTags}</div>
-          <div class="detail-meta">⏣ ${iter.meta}</div>
-          <div class="detail-tasks">${tasksHtml}</div>
-        </div>
-      </td></tr>`;
-    });
-    document.getElementById('detail-iter-tbody').innerHTML = rowsHtml;
-  } else {
-    iterEl.classList.add('hidden');
-  }
-
-  document.getElementById('detail-topology').innerHTML = p.topology;
-
-  let ch = '';
-  p.constraints.forEach(c => {
-    const sc = c.status === 'pass' ? 'pass' : c.status === 'fail' ? 'fail' : 'warn';
-    const si = c.status === 'pass' ? '✓' : c.status === 'fail' ? '✗' : '⚠';
-    ch += `<div class="constraint-row"><span class="constraint-name">${c.name}</span><span class="constraint-service">${c.service}</span><span class="constraint-status ${sc}">${si} ${c.status}</span></div>`;
-  });
-  document.getElementById('detail-constraints').innerHTML = ch;
-
-  let th = '';
-  p.timeline.forEach(t => {
-    th += `<div class="timeline-item ${t.type}"><div class="timeline-time">${t.time}</div><div class="timeline-desc">${t.desc}</div><div class="timeline-agent">${t.agent}</div></div>`;
-  });
-  document.getElementById('detail-timeline').innerHTML = th;
-
-  let dh = '';
-  p.decisions.forEach(d => {
-    dh += `<div class="decision-item"><div class="decision-id">${d.id}</div><div class="decision-topic">${d.topic}</div><div class="decision-meta">${d.risk} 风险 · ${d.time}</div></div>`;
-  });
-  document.getElementById('detail-decisions').innerHTML = dh;
-
-  // Render tech debt
-  renderProjectTechDebt(projectId);
-
-  // Make agent entries clickable — open Live Inspection
-  document.querySelectorAll('.svc-agent').forEach(el => {
-    el.style.cursor = 'pointer';
-    el.addEventListener('click', (e) => {
-      e.stopPropagation();
-      const text = el.textContent.trim();
-      if (text.includes('agent-1')) openLiveInspection('agent-1-mobile');
-      else if (text.includes('agent-2')) openLiveInspection('agent-2-tracker');
-      else if (text.includes('agent-3')) {
-        if (text.includes('已阻塞') || text.includes('blocked')) openLiveInspection('agent-3-data');
-        else openLiveInspection('agent-2-tracker');
-      }
-    });
-  });
-  // Make timeline items clickable
-  document.querySelectorAll('.timeline-item').forEach((el, i) => {
-    el.style.cursor = 'pointer';
-    el.addEventListener('click', () => {
-      const agentText = el.querySelector('.timeline-agent')?.textContent || '';
-      if (agentText.includes('agent-1')) openLiveInspection('agent-1-mobile');
-      else if (agentText.includes('agent-2')) openLiveInspection('agent-2-tracker');
-      else if (agentText.includes('agent-3')) openLiveInspection('agent-3-data');
-    });
-  });
-
-  showView('project-detail');
-}
+// Kick off
+initApp();
 </script>
-</body>
+
 </html>
