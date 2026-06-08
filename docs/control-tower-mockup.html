@@ -911,6 +911,87 @@ tr.detail-row td {
 .history-empty { text-align: center; color: var(--text-muted); font-size: 12px; padding: 30px 0; }
 
 /* ==========================================================================
+   ARCHITECT VIEWS — tech debt, cross-project deps, standards
+   ========================================================================== */
+.arch-header { margin-bottom: 20px; }
+.arch-header h2 { font-size: 18px; font-weight: 600; margin-bottom: 4px; }
+.arch-header p { font-size: 13px; color: var(--text-secondary); }
+
+/* Tech debt table */
+.debt-table { width: 100%; border-collapse: collapse; }
+.debt-table th {
+  text-align: left; font-size: 10px; text-transform: uppercase;
+  letter-spacing: 0.5px; color: var(--text-muted); font-weight: 600;
+  padding: 10px 16px; background: var(--bg-hover); border-bottom: 1px solid var(--border);
+}
+.debt-table td {
+  padding: 10px 16px; font-size: 12px; border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+}
+.debt-table tbody tr { transition: background 0.1s; }
+.debt-table tbody tr:hover { background: var(--bg-hover); }
+.debt-severity { font-size: 10px; padding: 2px 8px; border-radius: 4px; font-weight: 600; }
+.debt-severity.high { background: var(--red-bg); color: var(--red); }
+.debt-severity.medium { background: var(--yellow-bg); color: var(--yellow); }
+.debt-severity.low { background: var(--bg-hover); color: var(--text-muted); }
+.debt-overdue { font-size: 9px; color: var(--red); margin-left: 4px; }
+
+/* Cross-project dependency graph (simplified as list) */
+.dep-list { display: flex; flex-direction: column; gap: 8px; }
+.dep-item {
+  background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 14px 16px;
+}
+.dep-item .dep-head { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+.dep-item .dep-from, .dep-item .dep-to {
+  font-size: 12px; font-weight: 600; color: var(--text-primary);
+}
+.dep-item .dep-arrow { color: var(--text-muted); font-size: 14px; }
+.dep-item .dep-type {
+  font-size: 10px; padding: 2px 8px; border-radius: 4px;
+  background: var(--bg-hover); color: var(--text-muted);
+}
+.dep-item .dep-impact {
+  font-size: 11px; color: var(--text-secondary); margin-top: 6px;
+}
+.dep-item .dep-risk {
+  font-size: 10px; padding: 1px 6px; border-radius: 3px;
+}
+.dep-item .dep-risk.high { background: var(--red-bg); color: var(--red); }
+.dep-item .dep-risk.medium { background: var(--yellow-bg); color: var(--yellow); }
+.dep-item .dep-risk.low { background: var(--green-bg); color: var(--green); }
+
+/* Standards matrix */
+.standards-table { width: 100%; border-collapse: collapse; }
+.standards-table th {
+  text-align: left; font-size: 10px; text-transform: uppercase;
+  letter-spacing: 0.5px; color: var(--text-muted); font-weight: 600;
+  padding: 10px 16px; background: var(--bg-hover); border-bottom: 1px solid var(--border);
+}
+.standards-table td {
+  padding: 10px 16px; font-size: 12px; border-bottom: 1px solid var(--border);
+  vertical-align: middle; text-align: center;
+}
+.standards-table td:first-child { text-align: left; font-weight: 600; }
+.standards-table .st-ok { color: var(--green); }
+.standards-table .st-behind { color: var(--yellow); }
+.standards-table .st-critical { color: var(--red); }
+.st-version { font-family: var(--font-mono); font-size: 11px; }
+.st-latest { font-size: 9px; color: var(--text-muted); }
+
+/* Fleet card architect badges */
+.card-arch-meta { display: flex; gap: 8px; margin-bottom: 10px; align-items: center; }
+.arch-badge {
+  font-size: 10px; padding: 2px 8px; border-radius: 4px;
+  display: flex; align-items: center; gap: 4px;
+}
+.arch-badge.debt-low { background: var(--green-bg); color: var(--green); }
+.arch-badge.debt-warn { background: var(--yellow-bg); color: var(--yellow); }
+.arch-badge.debt-high { background: var(--red-bg); color: var(--red); }
+.arch-badge.standard { background: var(--purple-bg); color: var(--purple); }
+.arch-badge.deps { background: var(--blue-bg); color: var(--blue); }
+
+/* ==========================================================================
    HIDDEN / TOGGLE
    ========================================================================== */
 .hidden { display: none !important; }
@@ -927,6 +1008,8 @@ tr.detail-row td {
     <div class="global-stat"><span class="dot green"></span> <strong>4</strong> 个项目</div>
     <div class="global-stat"><span class="dot blue"></span> <strong>8</strong> 个 Agent 运行中</div>
     <div class="global-stat"><span class="dot red"></span> <strong id="escalationCount">1</strong> 个升级待处理</div>
+    <div class="global-stat"><span class="dot yellow"></span> <strong>12</strong> 项技术债</div>
+    <div class="global-stat"><span class="dot blue"></span> <strong>8</strong> 个跨项目依赖</div>
     <div class="global-stat" style="font-family:var(--font-mono)">⏣ 今日 Token 2.4M</div>
   </div>
   <div class="topbar-right">
@@ -986,6 +1069,13 @@ tr.detail-row td {
     </div>
 
     <div class="sidebar-section">
+      <div class="sidebar-label">🏛 架构视图</div>
+      <div class="nav-item" data-view="techdebt" onclick="showView('techdebt')">💸 技术债登记</div>
+      <div class="nav-item" data-view="crossdeps" onclick="showView('crossdeps')">🔗 跨项目依赖</div>
+      <div class="nav-item" data-view="standards" onclick="showView('standards')">📐 标准版本</div>
+    </div>
+
+    <div class="sidebar-section">
       <div class="sidebar-label">实时动态</div>
       <div style="font-size:11px;color:var(--text-muted);line-height:1.8">
         <div>🟢 tracker-system · agent-2 · 自检通过 · 3m</div>
@@ -1024,6 +1114,7 @@ tr.detail-row td {
             <span class="service-tag backend"><span class="mini-dot" style="background:var(--green)"></span> tracker-admin</span>
             <span class="service-tag data"><span class="mini-dot" style="background:var(--green)"></span> postgres</span>
           </div>
+          <div class="card-arch-meta"><span class="arch-badge debt-low">💸 2 项技术债</span><span class="arch-badge standard">📐 Pattern v2.1</span><span class="arch-badge deps">🔗 3 个外部依赖</span></div>
           <div class="card-metrics">
             <div class="metric green"><strong>100%</strong> 约束合规</div>
             <div class="metric"><strong>3</strong> 个 Agent</div>
@@ -1045,6 +1136,7 @@ tr.detail-row td {
             <span class="service-tag data"><span class="mini-dot" style="background:var(--green)"></span> mysql</span>
             <span class="service-tag data"><span class="mini-dot" style="background:var(--green)"></span> redis</span>
           </div>
+          <div class="card-arch-meta"><span class="arch-badge debt-warn">💸 5 项技术债</span><span class="arch-badge standard">📐 Pattern v1.8</span><span class="arch-badge deps">🔗 2 个外部依赖</span></div>
           <div class="card-metrics">
             <div class="metric yellow"><strong>85%</strong> 约束合规</div>
             <div class="metric"><strong>2</strong> 个 Agent</div>
@@ -1066,6 +1158,7 @@ tr.detail-row td {
             <span class="service-tag backend"><span class="mini-dot" style="background:var(--green)"></span> user-api</span>
             <span class="service-tag data"><span class="mini-dot" style="background:var(--green)"></span> postgres</span>
           </div>
+          <div class="card-arch-meta"><span class="arch-badge debt-low">💸 0 项技术债</span><span class="arch-badge standard">📐 Pattern v2.1</span><span class="arch-badge deps">🔗 1 个外部依赖</span></div>
           <div class="card-metrics">
             <div class="metric green"><strong>100%</strong> 约束合规</div>
             <div class="metric"><strong>2</strong> 个 Agent</div>
@@ -1088,6 +1181,7 @@ tr.detail-row td {
             <span class="service-tag data"><span class="mini-dot" style="background:var(--green)"></span> clickhouse</span>
             <span class="service-tag data"><span class="mini-dot" style="background:var(--red)"></span> MQ 待定</span>
           </div>
+          <div class="card-arch-meta"><span class="arch-badge debt-high">💸 8 项技术债</span><span class="arch-badge standard">📐 Pattern v1.5</span><span class="arch-badge deps">🔗 2 个外部依赖</span></div>
           <div class="card-metrics">
             <div class="metric red"><strong>60%</strong> 约束合规</div>
             <div class="metric"><strong>1</strong> Agent 阻塞</div>
@@ -1158,6 +1252,12 @@ tr.detail-row td {
           <div id="detail-decisions"></div>
         </div>
       </div>
+      <div class="detail-grid">
+        <div class="panel full-width">
+          <h3>💸 技术债</h3>
+          <div id="detail-techdebt"></div>
+        </div>
+      </div>
     </div>
 
     <!-- ============================================================
@@ -1200,6 +1300,30 @@ tr.detail-row td {
           <div class="decision-meta">tracker-system · 中风险 · 2 天前</div>
         </div>
       </div>
+    </div>
+
+    <!-- ============================================================
+         VIEW: TECH DEBT REGISTER
+         ============================================================ -->
+    <div id="view-techdebt" class="hidden">
+      <div class="arch-header"><h2>💸 技术债登记</h2><p>架构层面识别并追踪的技术债务 · 共 <strong>12</strong> 项，其中 <span style="color:var(--red)">3 项逾期</span></p></div>
+      <div class="panel full-width"><table class="debt-table"><thead><tr><th>ID</th><th>描述</th><th>项目</th><th>严重</th><th>产生原因</th><th>偿还计划</th></tr></thead><tbody id="debt-tbody"></tbody></table></div>
+    </div>
+
+    <!-- ============================================================
+         VIEW: CROSS-PROJECT DEPENDENCIES
+         ============================================================ -->
+    <div id="view-crossdeps" class="hidden">
+      <div class="arch-header"><h2>🔗 跨项目依赖</h2><p>8 个跨项目依赖关系 · <span style="color:var(--yellow)">3 个存在循环风险</span></p></div>
+      <div class="dep-list" id="dep-list"></div>
+    </div>
+
+    <!-- ============================================================
+         VIEW: STANDARDS VERSION TRACKING
+         ============================================================ -->
+    <div id="view-standards" class="hidden">
+      <div class="arch-header"><h2>📐 标准版本追踪</h2><p>组织级架构标准在各项目中的采用情况</p></div>
+      <div class="panel full-width"><table class="standards-table"><thead><tr><th>标准</th><th>最新版本</th><th>tracker-system</th><th>payment-gateway</th><th>user-mobile</th><th>data-pipeline</th></tr></thead><tbody id="standards-tbody"></tbody></table></div>
     </div>
 
     <!-- ============================================================
@@ -1833,6 +1957,10 @@ const projects = {
     health: 'green', name: 'tracker-system', meta: 'TypeScript · 5 个服务 · 3 个 Agent',
     description: '全栈资产追踪系统，支持 Web 管理后台与移动端扫码录入。采用 <strong>Express + React Native + PostgreSQL</strong> 技术栈，三个 Agent 并行开发前后端服务。当前处于实现阶段第 4/7 轮，已覆盖核心 CRUD 与认证流程。',
     descTags: ['Express', 'React Native', 'PostgreSQL', 'Redis'],
+    techdebt: [
+      { id:'TD-01', desc:'tracker-admin 未使用 Repository 模式，Service 层直接调用 Prisma', severity:'low', cause:'早期快速原型未重构', plan:'下个迭代' },
+      { id:'TD-02', desc:'mobile-app API 客户端未统一错误处理，各页面自行 catch', severity:'medium', cause:'多 Agent 并行开发缺乏协调', plan:'2 周内' },
+    ],
     history: [
       {
         id: 'T-TS-010', goal: '搭建项目骨架，配置 DoD、约束检查与 CI 流水线，初始化前后端服务与数据库。',
@@ -1967,6 +2095,13 @@ const projects = {
     health: 'yellow', name: 'payment-gateway', meta: 'Go · 4 个服务 · 2 个 Agent',
     description: '支付网关服务，负责对接 <strong>Stripe</strong> 支付渠道、账单处理与交易幂等性保障。基于 <strong>Go/Chi</strong> 构建，搭配 MySQL + Redis 存储。当前 billing-worker 存在约束警告，覆盖率 76% 未达标。',
     descTags: ['Go/Chi', 'MySQL', 'Redis', 'Stripe'],
+    techdebt: [
+      { id:'TD-05', desc:'billing-worker 违反分层依赖：worker 直接 import gateway-api 的 model 包', severity:'high', cause:'赶进度绕过分层约束', plan:'本周内修复', overdue: true },
+      { id:'TD-06', desc:'gateway-api 限流器使用固定窗口算法，高并发下不准确', severity:'medium', cause:'初期简化实现', plan:'下月迁移到 token bucket' },
+      { id:'TD-07', desc:'MySQL 连接池未配置健康检查，偶发断连未自动恢复', severity:'medium', cause:'默认配置未调优', plan:'本周内' },
+      { id:'TD-08', desc:'Stripe webhook 签名验证使用旧版 API，Stripe 将于 Q3 废弃', severity:'high', cause:'API 版本滞后', plan:'本月内迁移', overdue: true },
+      { id:'TD-09', desc:'billing worker 无优雅关闭，kill 信号可能导致重复计费', severity:'high', cause:'初期未考虑生产环境', plan:'紧急修复' },
+    ],
     history: [
       {
         id: 'T-PG-010', goal: '搭建支付网关骨架：Go/Chi 路由、MySQL  schema 设计与 Redis 缓存层。',
@@ -2042,6 +2177,7 @@ const projects = {
     health: 'green', name: 'user-mobile', meta: 'React Native · 4 个服务 · 2 个 Agent',
     description: '移动端用户应用，覆盖 <strong>iOS 与 Android</strong> 双平台。按平台独立实现导航层，共享业务逻辑与状态管理（<strong>Zustand</strong>）。集成生物识别认证、用户资料编辑等核心功能，覆盖率 92%。',
     descTags: ['React Native', 'Express', 'PostgreSQL', 'Zustand'],
+    techdebt: [],
     history: [
       {
         id: 'T-UM-010', goal: 'React Native 项目初始化，配置 Zustand 状态管理、API 客户端与导航框架。',
@@ -2121,6 +2257,16 @@ const projects = {
     health: 'red', name: 'data-pipeline', meta: 'Python · 4 个服务 · 1 个 Agent 阻塞 · 1 个升级',
     description: '实时数据处理管道，基于 <strong>Python/Airflow</strong> 进行 ETL 调度，搭配 <strong>ClickHouse</strong> 作为 OLAP 存储。stream-processor 服务因消息队列选型（Kafka vs Redis Streams）触发升级事件，Agent-3 当前处于阻塞状态等待人工决策。',
     descTags: ['Python', 'Airflow', 'ClickHouse', 'Kafka/Redis Streams'],
+    techdebt: [
+      { id:'TD-10', desc:'stream-processor 绕过 Repository 直连 ClickHouse', severity:'high', cause:'等待 MQ 选型期间未遵循模式', plan:'选型完成后重构', overdue: true },
+      { id:'TD-11', desc:'etl-worker 使用 print() 而非结构化日志，无日志级别', severity:'high', cause:'快速原型阶段', plan:'本周内' },
+      { id:'TD-12', desc:'Airflow DAG 无重试和告警机制，任务失败静默丢失', severity:'high', cause:'初期未配置', plan:'本周内修复', overdue: true },
+      { id:'TD-13', desc:'ClickHouse 连接使用默认用户+无密码', severity:'high', cause:'开发环境配置带入', plan:'紧急修复' },
+      { id:'TD-14', desc:'批量写入未使用 ClickHouse 物化视图，查询性能退化', severity:'medium', cause:'初期不了解 ClickHouse 特性', plan:'下个迭代' },
+      { id:'TD-15', desc:'stream-processor 无背压控制，高峰期可能 OOM', severity:'medium', cause:'待 MQ 选型后统一处理', plan:'选型后 1 周' },
+      { id:'TD-16', desc:'etl-worker 与 stream-processor 共用一个 ClickHouse 连接池', severity:'low', cause:'初期简化', plan:'有空优化' },
+      { id:'TD-17', desc:'代码中 Python 依赖版本未锁定，CI 偶发版本冲突', severity:'medium', cause:'未使用 pip freeze', plan:'本周内' },
+    ],
     history: [
       {
         id: 'T-DP-010', goal: '搭建数据管道骨架：Airflow 部署、ClickHouse 集群初始化与 Python ETL 框架。',
@@ -2278,6 +2424,92 @@ document.addEventListener('keydown', function(e) {
   }
 });
 
+// ===================================================================
+// ARCHITECT DATA & VIEWS
+// ===================================================================
+const crossProjectDeps = [
+  { from:'tracker-service', fromProject:'tracker-system', to:'user-api', toProject:'user-mobile', type:'API 调用', risk:'medium', impact:'tracker 的用户认证依赖 user-api 的 JWT 校验接口。如果 user-api 变更认证方式，tracker 需同步适配。' },
+  { from:'tracker-service', fromProject:'tracker-system', to:'redis', toProject:'shared', type:'共享资源', risk:'low', impact:'tracker 与 payment 共享 Redis 实例，需注意 key 命名空间隔离。' },
+  { from:'admin-web', fromProject:'tracker-system', to:'tracker-service', toProject:'tracker-system', type:'API 调用', risk:'low', impact:'项目内依赖，无跨项目风险。' },
+  { from:'gateway-api', fromProject:'payment-gateway', to:'redis', toProject:'shared', type:'共享资源', risk:'medium', impact:'与 tracker 共享 Redis。payment 的幂等性 key 必须与 tracker 的缓存 key 命名空间隔离。当前已隔离。' },
+  { from:'billing-worker', fromProject:'payment-gateway', to:'gateway-api', toProject:'payment-gateway', type:'反向依赖', risk:'high', impact:'billing-worker 直接依赖 gateway-api 的 model 包，违反分层。这是 TD-05 的技术债根源。修改 gateway-api 的数据模型会直接破坏 billing-worker。' },
+  { from:'stream-processor', fromProject:'data-pipeline', to:'clickhouse', toProject:'shared', type:'共享资源', risk:'medium', impact:'stream-processor 和 etl-worker 共享 ClickHouse 连接池，无隔离。高峰期可能互相影响（TD-16）。' },
+  { from:'mobile-app', fromProject:'user-mobile', to:'user-api', toProject:'user-mobile', type:'API 调用', risk:'low', impact:'项目内依赖。mobile-app 的用户操作全部通过 user-api，架构合理。' },
+  { from:'etl-worker', fromProject:'data-pipeline', to:'clickhouse', toProject:'shared', type:'共享资源', risk:'medium', impact:'参见 stream-processor 依赖。' },
+];
+
+const orgStandards = [
+  { name:'API 设计规范', latest:'v2.1', projects:{'tracker-system':'v2.1','payment-gateway':'v1.8','user-mobile':'v2.1','data-pipeline':'v1.5'} },
+  { name:'数据库访问规范', latest:'v2.0', projects:{'tracker-system':'v2.0','payment-gateway':'v2.0','user-mobile':'v2.0','data-pipeline':'v1.0'} },
+  { name:'日志规范', latest:'v1.3', projects:{'tracker-system':'v1.3','payment-gateway':'v1.3','user-mobile':'v1.3','data-pipeline':'v0.5'} },
+  { name:'错误处理规范', latest:'v1.2', projects:{'tracker-system':'v1.2','payment-gateway':'v1.2','user-mobile':'v1.2','data-pipeline':'v1.0'} },
+  { name:'认证授权规范', latest:'v2.0', projects:{'tracker-system':'v2.0','payment-gateway':'v1.5','user-mobile':'v2.0','data-pipeline':'—'} },
+];
+
+function renderTechDebtView() {
+  let allDebt = [];
+  Object.keys(projects).forEach(k => {
+    (projects[k].techdebt||[]).forEach(d => { allDebt.push({...d, project:projects[k].name}); });
+  });
+  const sevLabel = {high:'🔴 高',medium:'🟡 中',low:'⚪ 低'};
+  document.getElementById('debt-tbody').innerHTML = allDebt.map(d =>
+    `<tr><td style="font-family:var(--font-mono);font-size:11px;color:var(--blue)">${d.id}</td><td>${d.desc}${d.overdue?'<span class="debt-overdue">逾期</span>':''}</td><td>${d.project}</td><td><span class="debt-severity ${d.severity}">${sevLabel[d.severity]}</span></td><td style="font-size:11px;color:var(--text-muted)">${d.cause}</td><td style="font-size:11px">${d.plan}</td></tr>`
+  ).join('');
+}
+
+function renderCrossDepsView() {
+  const riskLabel = {high:'高风险',medium:'中风险',low:'低风险'};
+  document.getElementById('dep-list').innerHTML = crossProjectDeps.map(d =>
+    `<div class="dep-item">
+      <div class="dep-head">
+        <span class="dep-from">${d.fromProject}/${d.from}</span>
+        <span class="dep-arrow">→</span>
+        <span class="dep-to">${d.toProject}/${d.to}</span>
+        <span class="dep-type">${d.type}</span>
+        <span class="dep-risk ${d.risk}">${riskLabel[d.risk]}</span>
+      </div>
+      <div class="dep-impact">${d.impact}</div>
+    </div>`
+  ).join('');
+}
+
+function renderStandardsView() {
+  const rowClass = v => {
+    if (v==='—') return 'st-critical';
+    const parts = v.split('.'); const latest = orgStandards[0]?.latest?.split('.');
+    return 'st-ok'; // simplified
+  };
+  document.getElementById('standards-tbody').innerHTML = orgStandards.map(s => {
+    let cells = ''; Object.keys(s.projects).forEach(k => {
+      const v = s.projects[k]; const cls = v==='—'?'st-critical':v!==s.latest?'st-behind':'st-ok';
+      cells += `<td class="${cls}"><span class="st-version">${v}</span></td>`;
+    });
+    return `<tr><td>${s.name}</td><td><span class="st-version st-ok">${s.latest}</span></td>${cells}</tr>`;
+  }).join('');
+}
+
+// Render tech debt in project detail
+function renderProjectTechDebt(projectId) {
+  const p = projects[projectId]; const debts = p.techdebt || [];
+  if (debts.length === 0) {
+    document.getElementById('detail-techdebt').innerHTML = '<div style="text-align:center;color:var(--text-muted);font-size:12px;padding:20px">✅ 该项目暂无技术债</div>';
+    return;
+  }
+  const sevLabel = {high:'🔴 高',medium:'🟡 中',low:'⚪ 低'};
+  document.getElementById('detail-techdebt').innerHTML = `<table class="debt-table" style="margin:0"><thead><tr><th>ID</th><th>描述</th><th>严重</th><th>产生原因</th><th>偿还计划</th></tr></thead><tbody>${debts.map(d =>
+    `<tr><td style="font-family:var(--font-mono);font-size:11px;color:var(--blue)">${d.id}</td><td>${d.desc}${d.overdue?'<span class="debt-overdue">逾期</span>':''}</td><td><span class="debt-severity ${d.severity}">${sevLabel[d.severity]}</span></td><td style="font-size:11px;color:var(--text-muted)">${d.cause}</td><td style="font-size:11px">${d.plan}</td></tr>`
+  ).join('')}</tbody></table>`;
+}
+
+// Hook into showView for architect views
+const origShowView = showView;
+showView = function(view) {
+  origShowView(view);
+  if (view === 'techdebt') renderTechDebtView();
+  else if (view === 'crossdeps') renderCrossDepsView();
+  else if (view === 'standards') renderStandardsView();
+};
+
 function showProjectDetail(projectId) {
   // Store for history modal
   historyState.projectId = projectId;
@@ -2399,6 +2631,9 @@ function showProjectDetail(projectId) {
     dh += `<div class="decision-item"><div class="decision-id">${d.id}</div><div class="decision-topic">${d.topic}</div><div class="decision-meta">${d.risk} 风险 · ${d.time}</div></div>`;
   });
   document.getElementById('detail-decisions').innerHTML = dh;
+
+  // Render tech debt
+  renderProjectTechDebt(projectId);
 
   // Make agent entries clickable — open Live Inspection
   document.querySelectorAll('.svc-agent').forEach(el => {
