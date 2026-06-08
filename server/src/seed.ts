@@ -2,129 +2,158 @@ import { MemoryStore } from './db/memory.store';
 import { Project, Agent, Iteration, Decision, TechDebt, CrossDep, OrgStandard, HistoryIteration } from './types';
 
 export function seed(store: MemoryStore): void {
+  const now = new Date().toISOString();
+
   // ================================================================
-  // Org Standards
+  // STANDARDS (org-level patterns for all projects)
   // ================================================================
   store.setStandards([
-    { id: 'std-1', name: 'API 设计规范', latestVersion: 'v2.1', projects: { 'tracker-system': 'v2.1', 'payment-gateway': 'v1.8', 'user-mobile': 'v2.1', 'data-pipeline': 'v1.5' } },
-    { id: 'std-2', name: '数据库访问规范', latestVersion: 'v2.0', projects: { 'tracker-system': 'v2.0', 'payment-gateway': 'v2.0', 'user-mobile': 'v2.0', 'data-pipeline': 'v1.0' } },
-    { id: 'std-3', name: '日志规范', latestVersion: 'v1.3', projects: { 'tracker-system': 'v1.3', 'payment-gateway': 'v1.3', 'user-mobile': 'v1.3', 'data-pipeline': 'v0.5' } },
-    { id: 'std-4', name: '错误处理规范', latestVersion: 'v1.2', projects: { 'tracker-system': 'v1.2', 'payment-gateway': 'v1.2', 'user-mobile': 'v1.2', 'data-pipeline': 'v1.0' } },
-    { id: 'std-5', name: '认证授权规范', latestVersion: 'v2.0', projects: { 'tracker-system': 'v2.0', 'payment-gateway': 'v1.5', 'user-mobile': 'v2.0', 'data-pipeline': '—' } },
+    { id: 'std-1', name: 'API 设计规范', latestVersion: 'v2.1', projects: { 'auto-sentinel': 'v2.0', 'gate-flow': 'v2.1', 'star-river': 'v1.8', 'tracker-system': 'v2.1' } },
+    { id: 'std-2', name: '数据库访问规范', latestVersion: 'v2.0', projects: { 'auto-sentinel': 'v2.0', 'gate-flow': 'v2.0', 'star-river': 'v1.5', 'tracker-system': 'v2.0' } },
+    { id: 'std-3', name: '日志规范', latestVersion: 'v1.3', projects: { 'auto-sentinel': 'v1.3', 'gate-flow': 'v1.3', 'star-river': 'v1.0', 'tracker-system': 'v1.3' } },
+    { id: 'std-4', name: '错误处理规范', latestVersion: 'v1.2', projects: { 'auto-sentinel': 'v1.2', 'gate-flow': 'v1.2', 'star-river': 'v1.0', 'tracker-system': 'v1.2' } },
+    { id: 'std-5', name: '认证授权规范', latestVersion: 'v2.0', projects: { 'auto-sentinel': 'v2.0', 'gate-flow': 'v2.0', 'star-river': 'v1.5', 'tracker-system': 'v2.0' } },
   ]);
 
   // ================================================================
-  // Cross Project Dependencies
+  // CROSS-PROJECT DEPENDENCIES
   // ================================================================
   store.setCrossDeps([
-    { id: 'dep-1', fromService: 'tracker-service', fromProject: 'tracker-system', toService: 'user-api', toProject: 'user-mobile', depType: 'API 调用', risk: 'medium', impactDesc: 'tracker 的用户认证依赖 user-api 的 JWT 校验。若 user-api 变更认证方式，tracker 需同步适配。' },
-    { id: 'dep-2', fromService: 'tracker-service', fromProject: 'tracker-system', toService: 'redis', toProject: 'shared', depType: '共享资源', risk: 'low', impactDesc: '与 payment 共享 Redis，需注意 key 命名空间隔离。' },
-    { id: 'dep-3', fromService: 'gateway-api', fromProject: 'payment-gateway', toService: 'redis', toProject: 'shared', depType: '共享资源', risk: 'medium', impactDesc: 'payment 的幂等性 key 需与 tracker 缓存 key 隔离。' },
-    { id: 'dep-4', fromService: 'billing-worker', fromProject: 'payment-gateway', toService: 'gateway-api', toProject: 'payment-gateway', depType: '反向依赖', risk: 'high', impactDesc: 'billing-worker 直接依赖 gateway-api model 包，违反分层。修改 gateway-api 会破坏 billing-worker。' },
-    { id: 'dep-5', fromService: 'stream-processor', fromProject: 'data-pipeline', toService: 'clickhouse', toProject: 'shared', depType: '共享资源', risk: 'medium', impactDesc: 'stream-processor 和 etl-worker 共享 ClickHouse 连接池，高峰期可能互相影响。' },
-    { id: 'dep-6', fromService: 'mobile-app', fromProject: 'user-mobile', toService: 'user-api', toProject: 'user-mobile', depType: 'API 调用', risk: 'low', impactDesc: 'mobile-app 操作通过 user-api，架构合理。' },
-    { id: 'dep-7', fromService: 'etl-worker', fromProject: 'data-pipeline', toService: 'clickhouse', toProject: 'shared', depType: '共享资源', risk: 'medium', impactDesc: '参见 stream-processor 依赖。' },
-    { id: 'dep-8', fromService: 'admin-web', fromProject: 'tracker-system', toService: 'tracker-service', toProject: 'tracker-system', depType: 'API 调用', risk: 'low', impactDesc: '项目内依赖，无跨项目风险。' },
+    { id: 'dep-1', fromService: 'gate-flow-api', fromProject: 'gate-flow', toService: 'tracker-collector', toProject: 'tracker-system', depType: '数据消费', risk: 'medium', impactDesc: 'gate-flow 消费 tracker-system 采集的用户行为数据用于 A/B 实验分析。tracker 的数据格式变更会影响 gate-flow 的实验数据管道。' },
+    { id: 'dep-2', fromService: 'sentinel-detector', fromProject: 'auto-sentinel', toService: 'gate-flow-api', toProject: 'gate-flow', depType: '监控集成', risk: 'low', impactDesc: 'auto-sentinel 监控 gate-flow 的实验 API 健康状态与异常告警。' },
+    { id: 'dep-3', fromService: 'sentinel-detector', fromProject: 'auto-sentinel', toService: 'tracker-collector', toProject: 'tracker-system', depType: '监控集成', risk: 'low', impactDesc: 'auto-sentinel 监控 tracker-system 的数据采集管道延迟与错误率。' },
+    { id: 'dep-4', fromService: 'star-river-api', fromProject: 'star-river', toService: 'gate-flow-api', toProject: 'gate-flow', depType: '支付回调', risk: 'high', impactDesc: 'star-river 处理支付后回调 gate-flow 的实验转化事件。支付链路变更直接影响 A/B 实验的转化归因。' },
+    { id: 'dep-5', fromService: 'star-river-api', fromProject: 'star-river', toService: 'sentinel-detector', toProject: 'auto-sentinel', depType: '监控集成', risk: 'high', impactDesc: 'auto-sentinel 实时监控 star-river 支付接口的可用性。支付异常需 30s 内告警。' },
   ]);
 
   // ================================================================
-  // Projects
+  // PROJECTS — real projects from /home/hicooper/projects
   // ================================================================
   const projects: Project[] = [
-    { id: 'tracker-system', name: 'tracker-system', repoUrl: 'https://github.com/org/tracker-system', description: '全栈资产追踪系统，支持 Web 管理后台与移动端扫码录入。', domain: '企业资产', techTags: ['Express', 'React Native', 'PostgreSQL', 'Redis'], status: 'active', health: 'green', dodConfig: {} as any, constraints: [], createdAt: '2026-06-01T10:00:00Z' },
-    { id: 'payment-gateway', name: 'payment-gateway', repoUrl: 'https://github.com/org/payment-gateway', description: '支付网关服务，负责对接 Stripe 支付渠道、账单处理与交易幂等性保障。', domain: '金融支付', techTags: ['Go/Chi', 'MySQL', 'Redis', 'Stripe'], status: 'active', health: 'yellow', dodConfig: {} as any, constraints: [], createdAt: '2026-06-02T10:00:00Z' },
-    { id: 'user-mobile', name: 'user-mobile', repoUrl: 'https://github.com/org/user-mobile', description: '移动端用户应用，覆盖 iOS 与 Android 双平台。', domain: '移动应用', techTags: ['React Native', 'Express', 'PostgreSQL', 'Zustand'], status: 'active', health: 'green', dodConfig: {} as any, constraints: [], createdAt: '2026-06-03T10:00:00Z' },
-    { id: 'data-pipeline', name: 'data-pipeline', repoUrl: 'https://github.com/org/data-pipeline', description: '实时数据处理管道，基于 Python/Airflow 进行 ETL 调度。', domain: '数据处理', techTags: ['Python', 'Airflow', 'ClickHouse', 'Kafka/Redis Streams'], status: 'active', health: 'red', dodConfig: {} as any, constraints: [], createdAt: '2026-06-04T10:00:00Z' },
+    {
+      id: 'auto-sentinel', name: 'auto-sentinel',
+      repoUrl: 'file:///home/hicooper/projects/auto-sentinel',
+      description: 'AI 驱动的可观测性与自动修复平台。实时监控多项目健康状态，智能检测异常并自动触发修复流程。',
+      domain: '可观测性',
+      techTags: ['Go', 'Python', 'TypeScript', 'React'],
+      status: 'active', health: 'green',
+      dodConfig: {} as any, constraints: [],
+      createdAt: '2026-01-15T10:00:00Z',
+    },
+    {
+      id: 'gate-flow', name: 'gate-flow',
+      repoUrl: 'file:///home/hicooper/projects/gate-flow',
+      description: 'A/B 测试实验平台。支持流量分割、多变量实验、实时数据采集与统计显著性分析，为产品决策提供数据支撑。',
+      domain: 'A/B 实验',
+      techTags: ['TypeScript', 'React', 'Node.js', 'PostgreSQL'],
+      status: 'active', health: 'green',
+      dodConfig: {} as any, constraints: [],
+      createdAt: '2026-02-20T10:00:00Z',
+    },
+    {
+      id: 'star-river', name: 'star-river',
+      repoUrl: 'file:///home/hicooper/projects/star-river',
+      description: 'AI 时代的支付基础设施。提供统一的支付网关、多渠道路由、智能风控与资金清结算能力。',
+      domain: '支付基础设施',
+      techTags: ['Go', 'TypeScript', 'PostgreSQL', 'Redis'],
+      status: 'active', health: 'yellow',
+      dodConfig: {} as any, constraints: [],
+      createdAt: '2026-03-10T10:00:00Z',
+    },
+    {
+      id: 'tracker-system', name: 'tracker-system',
+      repoUrl: 'file:///home/hicooper/projects/tracker-system',
+      description: '埋点采集与流量分析系统。全维度采集用户行为数据，高性能事件管道，为 A/B 实验与数据分析提供可靠数据基础。',
+      domain: '数据采集',
+      techTags: ['TypeScript', 'Node.js', 'ClickHouse', 'Redis'],
+      status: 'active', health: 'green',
+      dodConfig: {} as any, constraints: [],
+      createdAt: '2026-04-05T10:00:00Z',
+    },
   ];
   projects.forEach(p => store.seedProject(p));
 
   // ================================================================
-  // Agents
+  // AGENTS
   // ================================================================
   const agents: Agent[] = [
-    { id: 'agent-2', projectId: 'tracker-system', service: 'tracker-service', status: 'running', mode: 'cloud', currentIteration: 4, currentPhase: '自检中', currentAction: '正在编写认证中间件集成测试', heartbeatAt: new Date().toISOString(), startedAt: '2026-06-07T15:00:00Z' },
-    { id: 'agent-1', projectId: 'tracker-system', service: 'mobile-app', status: 'running', mode: 'local', currentIteration: 3, currentPhase: '实现中', currentAction: '正在适配 Android 扫码页面布局', heartbeatAt: new Date().toISOString(), startedAt: '2026-06-07T16:00:00Z' },
-    { id: 'agent-3', projectId: 'tracker-system', service: 'admin-web', status: 'running', mode: 'cloud', currentIteration: 2, currentPhase: '实现中', currentAction: '正在实现推送消息队列接口', heartbeatAt: new Date().toISOString(), startedAt: '2026-06-07T16:30:00Z' },
-    { id: 'agent-4', projectId: 'payment-gateway', service: 'gateway-api', status: 'running', mode: 'cloud', currentIteration: 3, currentPhase: '自检中', currentAction: '正在编写 API 向后兼容性测试', heartbeatAt: new Date().toISOString(), startedAt: '2026-06-07T14:00:00Z' },
-    { id: 'agent-5', projectId: 'payment-gateway', service: 'billing-worker', status: 'running', mode: 'local', currentIteration: 4, currentPhase: '实现中', currentAction: '等待人工决策：billing 层架构调整方案', heartbeatAt: new Date().toISOString(), startedAt: '2026-06-07T14:30:00Z' },
-    { id: 'agent-6', projectId: 'user-mobile', service: 'mobile-app', status: 'running', mode: 'local', currentIteration: 4, currentPhase: '实现中', currentAction: '正在实现 iOS Tab Bar 导航动画', heartbeatAt: new Date().toISOString(), startedAt: '2026-06-07T15:30:00Z' },
-    { id: 'agent-7', projectId: 'user-mobile', service: 'user-api', status: 'running', mode: 'cloud', currentIteration: 2, currentPhase: '实现中', currentAction: '正在编写用户搜索与分页接口', heartbeatAt: new Date().toISOString(), startedAt: '2026-06-07T16:00:00Z' },
-    { id: 'agent-8', projectId: 'data-pipeline', service: 'stream-processor', status: 'blocked', mode: 'cloud', currentIteration: 3, currentPhase: '等待人工决策', currentAction: '等待人工决策：Kafka vs Redis Streams 选型', heartbeatAt: new Date().toISOString(), startedAt: '2026-06-07T10:00:00Z' },
+    { id: 'agent-1', projectId: 'auto-sentinel', service: 'sentinel-detector', status: 'running', mode: 'cloud', currentIteration: 2, currentPhase: '实现中', currentAction: '正在实现异常检测阈值自适应算法', heartbeatAt: now, startedAt: '2026-06-07T09:00:00Z' },
+    { id: 'agent-2', projectId: 'auto-sentinel', service: 'dashboard', status: 'running', mode: 'local', currentIteration: 1, currentPhase: '实现中', currentAction: '正在搭建告警事件时间线组件', heartbeatAt: now, startedAt: '2026-06-08T10:00:00Z' },
+    { id: 'agent-3', projectId: 'gate-flow', service: 'gate-flow-api', status: 'running', mode: 'cloud', currentIteration: 3, currentPhase: '自检中', currentAction: '正在实现多变量实验分流逻辑', heartbeatAt: now, startedAt: '2026-06-06T14:00:00Z' },
+    { id: 'agent-4', projectId: 'gate-flow', service: 'dashboard', status: 'running', mode: 'local', currentIteration: 2, currentPhase: '实现中', currentAction: '正在实现实验结果可视化图表', heartbeatAt: now, startedAt: '2026-06-07T11:00:00Z' },
+    { id: 'agent-5', projectId: 'star-river', service: 'star-river-api', status: 'running', mode: 'cloud', currentIteration: 5, currentPhase: '自检中', currentAction: '正在实现多渠道支付路由与 failover 逻辑', heartbeatAt: now, startedAt: '2026-06-05T08:00:00Z' },
+    { id: 'agent-6', projectId: 'star-river', service: 'hydra-pay', status: 'blocked', mode: 'cloud', currentIteration: 3, currentPhase: '等待人工决策', currentAction: '等待决定：支付风控模型使用规则引擎还是 ML', heartbeatAt: now, startedAt: '2026-06-06T16:00:00Z' },
+    { id: 'agent-7', projectId: 'tracker-system', service: 'tracker-collector', status: 'running', mode: 'cloud', currentIteration: 4, currentPhase: '实现中', currentAction: '正在优化批量写入 ClickHouse 的背压控制', heartbeatAt: now, startedAt: '2026-06-07T10:00:00Z' },
+    { id: 'agent-8', projectId: 'tracker-system', service: 'tracker-sdk', status: 'running', mode: 'local', currentIteration: 2, currentPhase: '实现中', currentAction: '正在实现 Web SDK 的自动埋点插件', heartbeatAt: now, startedAt: '2026-06-08T09:00:00Z' },
   ];
   agents.forEach(a => store.seedAgent(a));
 
   // ================================================================
-  // Active Iterations (task-centric)
+  // ACTIVE ITERATIONS
   // ================================================================
-  const now = new Date().toISOString();
   const iterations: Iteration[] = [
-    { id: 'iter-ts-1', agentId: 'agent-2', projectId: 'tracker-system', taskId: 'T-TS-001', goal: '实现用户认证与授权中间件，包括 JWT 签发/验证、session 管理、角色权限控制。', currentAction: '正在编写认证中间件集成测试', num: 4, total: 7, status: 'running', services: ['tracker-service', 'admin-web'], meta: '已消耗 45k Token · 约束全部通过', costTokens: 45000, tasks: [{ name: 'JWT 签发与验证逻辑', service: 'tracker-service', status: 'done' }, { name: '认证中间件集成测试', service: 'tracker-service', status: 'in-progress' }, { name: '管理后台登录页适配', service: 'admin-web', status: 'pending' }, { name: '覆盖率提升至 85%', service: 'tracker-service', status: 'pending' }], startedAt: now },
-    { id: 'iter-ts-2', agentId: 'agent-1', projectId: 'tracker-system', taskId: 'T-TS-002', goal: '移动端扫码录入页面与生物识别认证集成，保持覆盖率 90% 以上。', currentAction: '正在适配 Android 扫码页面布局', num: 3, total: 6, status: 'running', services: ['mobile-app', 'user-api'], meta: '已消耗 38k Token · 覆盖率 92%', costTokens: 38000, tasks: [{ name: 'iOS 扫码录入页面', service: 'mobile-app', status: 'done' }, { name: '生物识别凭证校验 API', service: 'user-api', status: 'done' }, { name: 'Android 扫码适配', service: 'mobile-app', status: 'in-progress' }], startedAt: now },
-    { id: 'iter-ts-3', agentId: 'agent-3', projectId: 'tracker-system', taskId: 'T-TS-003', goal: '为管理后台添加推送通知模块，包括模板管理和批量推送功能。', currentAction: '正在实现推送消息队列接口', num: 2, total: 5, status: 'running', services: ['admin-web', 'tracker-service'], meta: '已消耗 28k Token · lint 警告 1 个', costTokens: 28000, tasks: [{ name: '通知模板管理页面', service: 'admin-web', status: 'done' }, { name: '推送消息队列接口', service: 'tracker-service', status: 'in-progress' }, { name: '安全审计 (audit-ci)', service: 'admin-web', status: 'pending' }], startedAt: now },
-    { id: 'iter-ts-4', agentId: 'agent-2', projectId: 'tracker-system', taskId: 'T-TS-004', goal: '为 PostgreSQL 添加读写分离与连接池优化。', currentAction: '正在配置 PgBouncer 连接池参数', num: 1, total: 3, status: 'running', services: ['postgres', 'tracker-service'], meta: '已消耗 18k Token · 刚刚启动', costTokens: 18000, tasks: [{ name: 'PgBouncer 部署与配置', service: 'postgres', status: 'in-progress' }, { name: 'tracker-service 读写分离适配', service: 'tracker-service', status: 'pending' }], startedAt: now },
-    { id: 'iter-ts-5', agentId: 'agent-3', projectId: 'tracker-system', taskId: 'T-TS-005', goal: '实现 Redis 缓存层：为高频查询 API 添加缓存策略。', currentAction: '正在设计缓存键命名规范', num: 1, total: 3, status: 'running', services: ['redis', 'tracker-service'], meta: '已消耗 12k Token · 刚刚启动', costTokens: 12000, tasks: [{ name: '缓存键设计与命名规范', service: 'redis', status: 'in-progress' }, { name: 'tracker-service 缓存中间件', service: 'tracker-service', status: 'pending' }], startedAt: now },
-    { id: 'iter-pg-1', agentId: 'agent-4', projectId: 'payment-gateway', taskId: 'T-PG-001', goal: '完成 Stripe 支付渠道对接，实现 webhook 处理器与支付幂等性 Redis 锁。', currentAction: '正在编写 API 向后兼容性测试', num: 3, total: 5, status: 'running', services: ['gateway-api', 'billing-worker', 'redis'], meta: '已消耗 85k Token', costTokens: 85000, tasks: [{ name: 'Stripe webhook 处理器', service: 'gateway-api', status: 'done' }, { name: '支付幂等性 Redis 锁', service: 'gateway-api', status: 'done' }, { name: 'API 向后兼容性测试', service: 'gateway-api', status: 'in-progress' }], startedAt: now },
-    { id: 'iter-pg-2', agentId: 'agent-5', projectId: 'payment-gateway', taskId: 'T-PG-002', goal: '修复 billing-worker 层依赖违规，实现账单聚合批处理。', currentAction: '等待人工决策：billing 层架构调整方案', num: 4, total: 6, status: 'blocked', services: ['billing-worker'], meta: '已消耗 65k Token · ⚠ 1 个约束警告', costTokens: 65000, tasks: [{ name: '账单聚合批处理逻辑', service: 'billing-worker', status: 'done' }, { name: '修复 billing 层依赖违规', service: 'billing-worker', status: 'blocked' }, { name: '单元测试覆盖率至 80%', service: 'billing-worker', status: 'pending' }], startedAt: now },
-    { id: 'iter-um-1', agentId: 'agent-6', projectId: 'user-mobile', taskId: 'T-UM-001', goal: '为 iOS 和 Android 实现平台独立导航，集成生物识别认证。', currentAction: '正在实现 iOS Tab Bar 导航动画', num: 4, total: 7, status: 'running', services: ['mobile-app', 'user-api'], meta: '已消耗 44k Token · 覆盖率 92%', costTokens: 44000, tasks: [{ name: '生物识别认证页面', service: 'mobile-app', status: 'done' }, { name: 'iOS Tab Bar 导航', service: 'mobile-app', status: 'in-progress' }, { name: '用户搜索与分页 API', service: 'user-api', status: 'in-progress' }], startedAt: now },
-    { id: 'iter-um-2', agentId: 'agent-7', projectId: 'user-mobile', taskId: 'T-UM-002', goal: '用户微服务 API 扩展：生物识别凭证校验、用户搜索与分页。', currentAction: '正在编写用户搜索与分页接口', num: 2, total: 4, status: 'running', services: ['user-api'], meta: '已消耗 35k Token', costTokens: 35000, tasks: [{ name: '生物识别凭证校验 API', service: 'user-api', status: 'done' }, { name: '用户搜索与分页接口', service: 'user-api', status: 'in-progress' }], startedAt: now },
-    { id: 'iter-dp-1', agentId: 'agent-8', projectId: 'data-pipeline', taskId: 'T-DP-001', goal: '实现实时流处理管道：消息队列集成、流数据消费与 ClickHouse 入库。', currentAction: '等待人工决策：Kafka vs Redis Streams 选型', num: 3, total: 6, status: 'blocked', services: ['stream-processor', 'clickhouse', 'MQ 待定'], meta: '已消耗 200k Token · 🔴 升级事件阻塞', costTokens: 200000, tasks: [{ name: 'stream-processor 骨架', service: 'stream-processor', status: 'done' }, { name: 'ClickHouse 表结构与迁移', service: 'clickhouse', status: 'done' }, { name: '消息队列选型', service: 'MQ 待定', status: 'blocked' }], startedAt: now },
-    { id: 'iter-dp-2', agentId: 'agent-8', projectId: 'data-pipeline', taskId: 'T-DP-002', goal: '实现 Airflow DAG ETL 调度、ClickHouse 批量写入与数据质量校验。', currentAction: '正在编写数据质量校验规则', num: 1, total: 4, status: 'running', services: ['etl-worker', 'clickhouse'], meta: '已消耗 58k Token', costTokens: 58000, tasks: [{ name: 'Airflow DAG 编排', service: 'etl-worker', status: 'done' }, { name: 'ClickHouse 批量写入', service: 'clickhouse', status: 'done' }, { name: '数据质量校验规则', service: 'etl-worker', status: 'in-progress' }], startedAt: now },
+    // auto-sentinel
+    { id: 'iter-as-1', agentId: 'agent-1', projectId: 'auto-sentinel', taskId: 'T-AS-001', goal: '实现异常检测引擎：阈值自适应、多指标关联分析、告警收敛，减少误报率至 5% 以下。', currentAction: '正在实现异常检测阈值自适应算法', num: 2, total: 5, status: 'running', services: ['sentinel-detector', 'ai-engine'], meta: '已消耗 85k Token · 误报率已降至 12%', costTokens: 85000, tasks: [{ name: '多指标采集管道', service: 'sentinel-detector', status: 'done' }, { name: '阈值自适应算法', service: 'ai-engine', status: 'in-progress' }, { name: '告警收敛与去重', service: 'sentinel-detector', status: 'pending' }], startedAt: now },
+    { id: 'iter-as-2', agentId: 'agent-2', projectId: 'auto-sentinel', taskId: 'T-AS-002', goal: '告警事件时间线 Dashboard：实时事件流、历史回溯、一键触发修复。', currentAction: '正在搭建告警事件时间线组件', num: 1, total: 4, status: 'running', services: ['dashboard'], meta: '已消耗 32k Token · 刚启动', costTokens: 32000, tasks: [{ name: '事件时间线 UI 组件', service: 'dashboard', status: 'in-progress' }, { name: '实时事件 WebSocket 接入', service: 'dashboard', status: 'pending' }], startedAt: now },
+    // gate-flow
+    { id: 'iter-gf-1', agentId: 'agent-3', projectId: 'gate-flow', taskId: 'T-GF-001', goal: '实现多变量实验引擎：支持正交/互斥流量分割、实验配置热更新、统计显著性计算。', currentAction: '正在实现多变量实验分流逻辑', num: 3, total: 6, status: 'running', services: ['gate-flow-api', 'backend'], meta: '已消耗 120k Token · 单变量实验已通过', costTokens: 120000, tasks: [{ name: '流量分割引擎', service: 'gate-flow-api', status: 'done' }, { name: '实验配置管理', service: 'backend', status: 'done' }, { name: '多变量正交分流', service: 'gate-flow-api', status: 'in-progress' }, { name: '统计显著性检验', service: 'backend', status: 'pending' }], startedAt: now },
+    { id: 'iter-gf-2', agentId: 'agent-4', projectId: 'gate-flow', taskId: 'T-GF-002', goal: '实验结果可视化：指标对比图表、置信区间展示、实验报告自动生成。', currentAction: '正在实现实验结果可视化图表', num: 2, total: 4, status: 'running', services: ['dashboard'], meta: '已消耗 56k Token', costTokens: 56000, tasks: [{ name: '指标对比图表组件', service: 'dashboard', status: 'done' }, { name: '置信区间可视化', service: 'dashboard', status: 'in-progress' }, { name: '报告自动生成', service: 'dashboard', status: 'pending' }], startedAt: now },
+    // star-river
+    { id: 'iter-sr-1', agentId: 'agent-5', projectId: 'star-river', taskId: 'T-SR-001', goal: '多渠道支付路由：主备切换、费率择优、超时 failover，实现 99.99% 支付可用性。', currentAction: '正在实现多渠道支付路由与 failover 逻辑', num: 5, total: 7, status: 'running', services: ['star-river-api', 'hydra-pay'], meta: '已消耗 210k Token · 双渠道已接入', costTokens: 210000, tasks: [{ name: '支付宝渠道接入', service: 'hydra-pay', status: 'done' }, { name: '微信支付渠道接入', service: 'hydra-pay', status: 'done' }, { name: '路由与 failover 引擎', service: 'star-river-api', status: 'in-progress' }, { name: '99.99% 可用性压测', service: 'star-river-api', status: 'pending' }], startedAt: now },
+    { id: 'iter-sr-2', agentId: 'agent-6', projectId: 'star-river', taskId: 'T-SR-002', goal: '智能风控引擎：交易风险评估、异常交易识别、实时拦截。', currentAction: '等待决定：风控模型使用规则引擎还是 ML', num: 3, total: 6, status: 'blocked', services: ['hydra-pay', 'hydra-wall'], meta: '已消耗 95k Token · 🔴 升级事件阻塞', costTokens: 95000, tasks: [{ name: '交易数据采集', service: 'hydra-wall', status: 'done' }, { name: '基础规则引擎', service: 'hydra-pay', status: 'done' }, { name: '风控模型选型', service: 'hydra-pay', status: 'blocked' }, { name: '实时拦截集成', service: 'hydra-wall', status: 'pending' }], startedAt: now },
+    // tracker-system
+    { id: 'iter-ts-1', agentId: 'agent-7', projectId: 'tracker-system', taskId: 'T-TS-001', goal: '优化 ClickHouse 写入性能：批量写入、背压控制、物化视图预聚合。', currentAction: '正在优化批量写入 ClickHouse 的背压控制', num: 4, total: 6, status: 'running', services: ['tracker-collector', 'backend'], meta: '已消耗 78k Token · 写入延迟降低 40%', costTokens: 78000, tasks: [{ name: '批量写入优化', service: 'tracker-collector', status: 'done' }, { name: '背压控制', service: 'tracker-collector', status: 'in-progress' }, { name: '物化视图预聚合', service: 'backend', status: 'pending' }], startedAt: now },
+    { id: 'iter-ts-2', agentId: 'agent-8', projectId: 'tracker-system', taskId: 'T-TS-002', goal: 'Web SDK 自动埋点：页面浏览、点击、曝光事件自动采集，支持自定义事件。', currentAction: '正在实现 Web SDK 的自动埋点插件', num: 2, total: 5, status: 'running', services: ['tracker-sdk'], meta: '已消耗 42k Token · 基础 SDK 已完成', costTokens: 42000, tasks: [{ name: 'SDK 核心初始化', service: 'tracker-sdk', status: 'done' }, { name: '自动埋点插件', service: 'tracker-sdk', status: 'in-progress' }, { name: '自定义事件 API', service: 'tracker-sdk', status: 'pending' }], startedAt: now },
   ];
   iterations.forEach(it => store.seedIteration(it));
 
   // ================================================================
-  // Decisions
+  // DECISIONS
   // ================================================================
   const decisions: Decision[] = [
-    { id: 'esc-1', projectId: 'data-pipeline', type: 'escalation', urgency: 'urgent', topic: '选择消息队列方案：Kafka vs Redis Streams', context: 'stream-processor 需要实现实时事件流的缓冲和分发。当前数据量预估为 50k msg/s。', options: [{ name: 'Apache Kafka', recommended: true, pros: ['吞吐量 1M+ msg/s', '持久化原生支持', 'ClickHouse Kafka Engine 直连'], cons: ['需部署 KRaft 集群', '运维复杂度高'] }, { name: 'Redis Streams', recommended: false, pros: ['复用已有 Redis', '零运维增量'], cons: ['接近性能上限', '消息持久化弱于 Kafka'] }], status: 'pending', impact: { constraints: ['no_new_deps_without_adr'], services: ['stream-processor', 'clickhouse'], costEstimate: 'Kafka +2GB 内存 / +4 vCPU' }, createdAt: '2026-06-07T10:00:00Z' },
-    { id: 'esc-3', projectId: 'user-mobile', type: 'escalation', urgency: 'normal', topic: 'iOS 和 Android 是否共享导航组件？', context: 'iOS 期望底部 Tab Bar，Android 期望 Navigation Rail。涉及 UI 一致性 vs 平台原生体验。', options: [{ name: '平台各自实现导航，共享业务逻辑', recommended: true, pros: ['完全遵循平台规范', '用户感知更原生'], cons: ['导航代码无法复用'] }, { name: '统一导航组件，平台自适应', recommended: false, pros: ['一次编写两处运行', '维护成本低'], cons: ['iOS 用户可能觉得不够 iOS'] }], status: 'pending', impact: { constraints: [], services: ['iOS-app', 'Android-app'], costEstimate: '约 +2 天开发时间' }, createdAt: '2026-06-07T14:00:00Z' },
-    { id: 'D-20260607-001', projectId: 'tracker-system', type: 'adr', urgency: 'normal', topic: '选择 Repository 模式而非 TypeORM 直连', context: '', options: [], chosen: 'Repository 模式', status: 'resolved', impact: { constraints: [], services: [], costEstimate: '' }, createdAt: '2026-06-07T09:00:00Z', resolvedAt: '2026-06-07T09:30:00Z' },
-    { id: 'D-20260606-003', projectId: 'payment-gateway', type: 'adr', urgency: 'normal', topic: 'Go 并发模型选择 goroutine pool', context: '', options: [], chosen: 'goroutine pool', status: 'resolved', impact: { constraints: [], services: [], costEstimate: '' }, createdAt: '2026-06-06T10:00:00Z', resolvedAt: '2026-06-06T11:00:00Z' },
-    { id: 'D-20260606-004', projectId: 'data-pipeline', type: 'adr', urgency: 'normal', topic: 'ETL 调度选择 Airflow 而非 Prefect', context: '', options: [], chosen: 'Airflow', status: 'resolved', impact: { constraints: [], services: [], costEstimate: '' }, createdAt: '2026-06-06T08:00:00Z', resolvedAt: '2026-06-06T09:00:00Z' },
-    { id: 'D-20260606-001', projectId: 'user-mobile', type: 'adr', urgency: 'normal', topic: '移动端状态管理选择 Zustand 而非 Redux', context: '', options: [], chosen: 'Zustand', status: 'resolved', impact: { constraints: [], services: [], costEstimate: '' }, createdAt: '2026-06-06T07:00:00Z', resolvedAt: '2026-06-06T08:00:00Z' },
-    { id: 'D-20260604-001', projectId: 'payment-gateway', type: 'adr', urgency: 'normal', topic: '支付幂等性使用 Redis 锁而非 DB 唯一约束', context: '', options: [], chosen: 'Redis 锁', status: 'resolved', impact: { constraints: [], services: [], costEstimate: '' }, createdAt: '2026-06-04T10:00:00Z', resolvedAt: '2026-06-04T11:00:00Z' },
+    { id: 'esc-1', projectId: 'star-river', type: 'escalation', urgency: 'urgent', topic: '风控模型选择：规则引擎 vs 机器学习', context: 'hydra-pay 风控模块需要在规则引擎（确定性高、可解释）和 ML 模型（自适应、但需要训练数据）之间选择。支付业务对误拦截敏感度极高。', options: [{ name: '规则引擎（Drools/自研）', recommended: true, pros: ['规则可解释、可审计', '无冷启动问题', '风控团队可直接维护规则'], cons: ['无法识别未知欺诈模式', '规则膨胀后维护成本高'] }, { name: 'ML 模型（XGBoost + 特征工程）', recommended: false, pros: ['可自适应新欺诈模式', '长期准确率更高'], cons: ['初期缺乏标注数据', '误拦截需人工审核'] }], status: 'pending', impact: { constraints: ['no_new_deps_without_adr'], services: ['hydra-pay', 'hydra-wall'], costEstimate: '规则引擎: +0.5 人周维护/月；ML: 初期 +2 人周训练数据标注' }, createdAt: '2026-06-08T08:00:00Z' },
+    { id: 'D-20260608-001', projectId: 'auto-sentinel', type: 'adr', urgency: 'normal', topic: '告警收敛策略选择滑动窗口 + 指纹去重', context: '', options: [], chosen: '滑动窗口 + 指纹去重', status: 'resolved', impact: { constraints: [], services: [], costEstimate: '' }, createdAt: '2026-06-08T09:00:00Z', resolvedAt: '2026-06-08T10:00:00Z' },
+    { id: 'D-20260607-001', projectId: 'gate-flow', type: 'adr', urgency: 'normal', topic: '实验分流使用一致性哈希而非随机分配', context: '', options: [], chosen: '一致性哈希', status: 'resolved', impact: { constraints: [], services: [], costEstimate: '' }, createdAt: '2026-06-07T14:00:00Z', resolvedAt: '2026-06-07T15:00:00Z' },
+    { id: 'D-20260606-001', projectId: 'tracker-system', type: 'adr', urgency: 'normal', topic: '埋点数据写入选择 ClickHouse 而非 Elasticsearch', context: '', options: [], chosen: 'ClickHouse', status: 'resolved', impact: { constraints: [], services: [], costEstimate: '' }, createdAt: '2026-06-06T10:00:00Z', resolvedAt: '2026-06-06T11:00:00Z' },
+    { id: 'D-20260605-001', projectId: 'star-river', type: 'adr', urgency: 'normal', topic: '支付幂等性使用 Redis 分布式锁 + DB 唯一约束双重保障', context: '', options: [], chosen: 'Redis + DB 双重保障', status: 'resolved', impact: { constraints: [], services: [], costEstimate: '' }, createdAt: '2026-06-05T09:00:00Z', resolvedAt: '2026-06-05T10:00:00Z' },
   ];
   decisions.forEach(d => store.seedDecision(d));
 
   // ================================================================
-  // Tech Debt
+  // TECH DEBT
   // ================================================================
   const techDebts: TechDebt[] = [
-    { id: 'TD-01', projectId: 'tracker-system', description: 'tracker-admin 未使用 Repository 模式，Service 层直接调用 Prisma', severity: 'low', cause: '早期快速原型未重构', plan: '下个迭代', overdue: false, status: 'open', createdAt: '2026-06-05T00:00:00Z' },
-    { id: 'TD-02', projectId: 'tracker-system', description: 'mobile-app API 客户端未统一错误处理，各页面自行 catch', severity: 'medium', cause: '多 Agent 并行缺乏协调', plan: '2 周内', overdue: false, status: 'open', createdAt: '2026-06-06T00:00:00Z' },
-    { id: 'TD-05', projectId: 'payment-gateway', description: 'billing-worker 违反分层依赖：直接 import gateway-api 的 model 包', severity: 'high', cause: '赶进度绕过分层约束', plan: '本周内修复', overdue: true, status: 'open', createdAt: '2026-06-03T00:00:00Z' },
-    { id: 'TD-06', projectId: 'payment-gateway', description: 'gateway-api 限流器使用固定窗口算法，高并发下不准确', severity: 'medium', cause: '初期简化实现', plan: '下月迁移到 token bucket', overdue: false, status: 'open', createdAt: '2026-06-04T00:00:00Z' },
-    { id: 'TD-07', projectId: 'payment-gateway', description: 'MySQL 连接池未配置健康检查，偶发断连未自动恢复', severity: 'medium', cause: '默认配置未调优', plan: '本周内', overdue: false, status: 'open', createdAt: '2026-06-05T00:00:00Z' },
-    { id: 'TD-08', projectId: 'payment-gateway', description: 'Stripe webhook 签名验证使用旧版 API，Stripe Q3 废弃', severity: 'high', cause: 'API 版本滞后', plan: '本月内迁移', overdue: true, status: 'open', createdAt: '2026-06-01T00:00:00Z' },
-    { id: 'TD-09', projectId: 'payment-gateway', description: 'billing worker 无优雅关闭，kill 信号可能导致重复计费', severity: 'high', cause: '初期未考虑生产环境', plan: '紧急修复', overdue: false, status: 'open', createdAt: '2026-06-06T00:00:00Z' },
-    { id: 'TD-10', projectId: 'data-pipeline', description: 'stream-processor 绕过 Repository 直连 ClickHouse', severity: 'high', cause: '等待 MQ 选型期间未遵循模式', plan: '选型完成后重构', overdue: true, status: 'open', createdAt: '2026-06-02T00:00:00Z' },
-    { id: 'TD-11', projectId: 'data-pipeline', description: 'etl-worker 使用 print() 而非结构化日志', severity: 'high', cause: '快速原型阶段', plan: '本周内', overdue: false, status: 'open', createdAt: '2026-06-03T00:00:00Z' },
-    { id: 'TD-12', projectId: 'data-pipeline', description: 'Airflow DAG 无重试和告警机制，任务失败静默丢失', severity: 'high', cause: '初期未配置', plan: '本周内修复', overdue: true, status: 'open', createdAt: '2026-06-02T00:00:00Z' },
-    { id: 'TD-13', projectId: 'data-pipeline', description: 'ClickHouse 连接使用默认用户+无密码', severity: 'high', cause: '开发环境配置带入', plan: '紧急修复', overdue: false, status: 'open', createdAt: '2026-06-06T00:00:00Z' },
-    { id: 'TD-14', projectId: 'data-pipeline', description: '批量写入未使用 ClickHouse 物化视图，查询性能退化', severity: 'medium', cause: '初期不了解 ClickHouse 特性', plan: '下个迭代', overdue: false, status: 'open', createdAt: '2026-06-04T00:00:00Z' },
+    { id: 'TD-01', projectId: 'auto-sentinel', description: 'ai-engine 的异常检测模型未版本化，更新模型可能破坏已有规则', severity: 'medium', cause: '初期快速迭代未建立模型管理流程', plan: '下个迭代引入 MLflow', overdue: false, status: 'open', createdAt: '2026-06-01T00:00:00Z' },
+    { id: 'TD-02', projectId: 'auto-sentinel', description: 'dashboard 的 WebSocket 连接未做心跳保活，偶发断连不重连', severity: 'low', cause: '原型阶段未考虑长连接稳定性', plan: '本周内', overdue: false, status: 'open', createdAt: '2026-06-03T00:00:00Z' },
+    { id: 'TD-03', projectId: 'gate-flow', description: '实验配置热更新未做版本控制，回滚依赖手动操作', severity: 'high', cause: 'MVP 阶段未考虑配置管理', plan: '本月内引入配置版本化', overdue: false, status: 'open', createdAt: '2026-05-28T00:00:00Z' },
+    { id: 'TD-04', projectId: 'gate-flow', description: '统计显著性计算使用简化公式，大样本量下有精度损失', severity: 'medium', cause: '初期用 t-test 近似，实际应用需要 bootstrap', plan: '下个迭代', overdue: false, status: 'open', createdAt: '2026-06-02T00:00:00Z' },
+    { id: 'TD-05', projectId: 'star-river', description: 'hydra-pay 的支付回调处理无重试机制，偶发丢单', severity: 'high', cause: '初期简化了回调处理链路', plan: '紧急修复，本周内', overdue: true, status: 'open', createdAt: '2026-05-25T00:00:00Z' },
+    { id: 'TD-06', projectId: 'star-river', description: '支付路由的费率比较逻辑硬编码在代码中，新增渠道需改代码', severity: 'medium', cause: '初期只有两个渠道，未抽象', plan: '本月内重构为配置驱动', overdue: false, status: 'open', createdAt: '2026-06-01T00:00:00Z' },
+    { id: 'TD-07', projectId: 'tracker-system', description: 'tracker-collector 的事件去重使用内存 Set，重启丢失', severity: 'high', cause: '快速原型阶段', plan: '迁移到 Redis Bloom Filter', overdue: true, status: 'open', createdAt: '2026-05-20T00:00:00Z' },
+    { id: 'TD-08', projectId: 'tracker-system', description: 'tracker-sdk 的 gzip 压缩在移动端未启用，流量消耗偏高', severity: 'medium', cause: '移动端适配遗漏', plan: '本周内', overdue: false, status: 'open', createdAt: '2026-06-04T00:00:00Z' },
   ];
   techDebts.forEach(td => store.seedTechDebt(td));
 
   // ================================================================
-  // History
+  // HISTORY
   // ================================================================
+  store.seedHistory('auto-sentinel', [
+    { id: 'T-AS-010', goal: '搭建 Sentinel 项目骨架：Go 平台服务 + Python AI 引擎 + React Dashboard。', agent: 'agent-1', services: ['platform', 'ai-engine', 'dashboard'], completed: '5 天前', tasksDone: 6, cost: '180k' },
+    { id: 'T-AS-011', goal: '实现基础监控采集：指标接入、日志聚合、基础告警规则。', agent: 'agent-1', services: ['sentinel-detector', 'platform'], completed: '3 天前', tasksDone: 5, cost: '145k' },
+  ]);
+  store.seedHistory('gate-flow', [
+    { id: 'T-GF-010', goal: '搭建 GateFlow 项目骨架：TypeScript monorepo，实验配置管理与流量分割 MVP。', agent: 'agent-3', services: ['gate-flow-api', 'backend', 'dashboard'], completed: '4 天前', tasksDone: 7, cost: '210k' },
+    { id: 'T-GF-011', goal: '实现单变量 A/B 实验：流量分割、数据采集、基础统计报告。', agent: 'agent-3', services: ['gate-flow-api', 'backend'], completed: '2 天前', tasksDone: 5, cost: '168k' },
+  ]);
+  store.seedHistory('star-river', [
+    { id: 'T-SR-010', goal: '搭建星河支付骨架：Go 支付核心 + 渠道适配层 + 基础风控。', agent: 'agent-5', services: ['star-river-api', 'hydra-pay', 'hydra-wall'], completed: '6 天前', tasksDone: 8, cost: '320k' },
+    { id: 'T-SR-011', goal: '支付宝渠道接入：支付/退款/查询/对账全流程。', agent: 'agent-5', services: ['hydra-pay', 'star-river-api'], completed: '4 天前', tasksDone: 6, cost: '195k' },
+    { id: 'T-SR-012', goal: '微信支付渠道接入：支付/退款/查询/对账全流程。', agent: 'agent-5', services: ['hydra-pay', 'star-river-api'], completed: '昨天', tasksDone: 6, cost: '180k' },
+  ]);
   store.seedHistory('tracker-system', [
-    { id: 'T-TS-010', goal: '搭建项目骨架，配置 DoD、约束检查与 CI 流水线，初始化前后端服务与数据库。', agent: 'agent-2', services: ['tracker-service', 'admin-web', 'postgres'], completed: '3 天前', tasksDone: 6, cost: '128k' },
-    { id: 'T-TS-011', goal: '实现核心 CRUD 与数据模型：资产登记、分类、查询 API，前端管理表格与筛选。', agent: 'agent-2', services: ['tracker-service', 'admin-web', 'postgres'], completed: '2 天前', tasksDone: 8, cost: '210k' },
-    { id: 'T-TS-012', goal: '重构错误处理逻辑，统一 API 错误格式，添加全局异常过滤器与前端 toast 提示。', agent: 'agent-2', services: ['tracker-service', 'admin-web', 'mobile-app'], completed: '1 天前', tasksDone: 5, cost: '95k' },
-  ]);
-  store.seedHistory('payment-gateway', [
-    { id: 'T-PG-010', goal: '搭建支付网关骨架：Go/Chi 路由、MySQL schema 设计与 Redis 缓存层。', agent: 'agent-4', services: ['gateway-api', 'mysql', 'redis'], completed: '3 天前', tasksDone: 6, cost: '145k' },
-    { id: 'T-PG-011', goal: '实现支付幂等性机制，使用 Redis 分布式锁防止重复扣款，编写并发测试。', agent: 'agent-4', services: ['gateway-api', 'redis'], completed: '昨天', tasksDone: 4, cost: '98k' },
-  ]);
-  store.seedHistory('user-mobile', [
-    { id: 'T-UM-010', goal: 'React Native 项目初始化，配置 Zustand 状态管理、API 客户端与导航框架。', agent: 'agent-6', services: ['mobile-app', 'user-api'], completed: '3 天前', tasksDone: 5, cost: '98k' },
-    { id: 'T-UM-011', goal: '用户注册与登录流程：手机号验证、OAuth 第三方登录、session 持久化。', agent: 'agent-6', services: ['mobile-app', 'user-api', 'postgres'], completed: '2 天前', tasksDone: 7, cost: '176k' },
-  ]);
-  store.seedHistory('data-pipeline', [
-    { id: 'T-DP-010', goal: '搭建数据管道骨架：Airflow 部署、ClickHouse 集群初始化与 Python ETL 框架。', agent: 'agent-8', services: ['etl-worker', 'clickhouse'], completed: '4 天前', tasksDone: 6, cost: '185k' },
-    { id: 'T-DP-011', goal: 'ETL 数据摄取：从多个数据源批量导入 ClickHouse，编写数据校验脚本。', agent: 'agent-8', services: ['etl-worker', 'clickhouse'], completed: '2 天前', tasksDone: 5, cost: '220k' },
+    { id: 'T-TS-010', goal: '搭建 Tracker 项目骨架：事件采集管道、ClickHouse schema、SDK 基础框架。', agent: 'agent-7', services: ['tracker-collector', 'backend', 'tracker-sdk'], completed: '5 天前', tasksDone: 7, cost: '230k' },
+    { id: 'T-TS-011', goal: '实现 Web SDK v0.1：页面浏览、点击事件自动采集、自定义事件接口。', agent: 'agent-8', services: ['tracker-sdk'], completed: '2 天前', tasksDone: 5, cost: '128k' },
   ]);
 
-  console.log('Seed complete: 4 projects, 8 agents, 11 active iterations, 7 decisions, 12 tech debts, history');
+  console.log('Seed: 4 projects (auto-sentinel, gate-flow, star-river, tracker-system) | 8 agents | 8 iterations | 5 decisions | 8 tech debts');
 }

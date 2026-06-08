@@ -43,5 +43,7 @@ server.listen(PORT, () => {
   console.log(`🔮 Product Lens    http://localhost:${PORT}/lens`);
   console.log(`📡 API             http://localhost:${PORT}/api/projects`);
   console.log(`📡 WebSocket       ws://localhost:${PORT}/ws`);
-  console.log(`   Projects: ${store.listProjects().length} | Agents: 8 | Iterations: 11\n`);
+  const activeAgents = Array.from(store['agents']?.values?.() || []);
+  const activeIters = Array.from(store['iterations']?.values?.() || []);
+  console.log(`   Projects: ${store.listProjects().length} | Agents: ${activeAgents.filter((a:any) => a.status === 'running' || a.status === 'blocked').length} | Iterations: ${activeIters.filter((i:any) => i.status === 'running' || i.status === 'blocked').length}\n`);
 });
