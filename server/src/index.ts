@@ -20,19 +20,19 @@ seed(store);
 // API routes
 app.use(createRouter(store));
 
-// Serve static frontend from docs/
+// Serve React frontend (production build or fallback to docs/)
+const webDist = path.resolve(__dirname, '../../web/dist');
 const docsPath = path.resolve(__dirname, '../../docs');
-app.use(express.static(docsPath));
-
-// Root → control tower
-app.get('/', (_req, res) => {
-  res.sendFile(path.join(docsPath, 'control-tower-mockup.html'));
-});
-
-// Product lens
-app.get('/lens', (_req, res) => {
-  res.sendFile(path.join(docsPath, 'product-lens-mockup.html'));
-});
+const fs = require('fs');
+if (fs.existsSync(webDist)) {
+  app.use(express.static(webDist));
+  app.get('*', (_req: any, res: any) => res.sendFile(path.join(webDist, 'index.html')));
+} else {
+  // Fallback: serve mockup HTML for development
+  app.use(express.static(docsPath));
+  app.get('/', (_req, res) => res.sendFile(path.join(docsPath, 'control-tower-mockup.html')));
+  app.get('/lens', (_req, res) => res.sendFile(path.join(docsPath, 'product-lens-mockup.html')));
+}
 
 // WebSocket
 wsHub.init(server);
