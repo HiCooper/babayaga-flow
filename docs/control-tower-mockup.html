@@ -1100,96 +1100,7 @@ tr.detail-row td {
       </div>
 
       <div class="fleet-grid">
-
-        <!-- tracker-system -->
-        <div class="project-card" onclick="showProjectDetail('tracker-system')">
-          <div class="card-header">
-            <div class="card-title"><span class="card-health green"></span> tracker-system</div>
-            <span class="card-tech">TypeScript</span>
-          </div>
-          <div class="service-tags">
-            <span class="service-tag web"><span class="mini-dot" style="background:var(--green)"></span> admin-web</span>
-            <span class="service-tag mobile"><span class="mini-dot" style="background:var(--green)"></span> mobile-app</span>
-            <span class="service-tag backend"><span class="mini-dot" style="background:var(--green)"></span> tracker-service</span>
-            <span class="service-tag backend"><span class="mini-dot" style="background:var(--green)"></span> tracker-admin</span>
-            <span class="service-tag data"><span class="mini-dot" style="background:var(--green)"></span> postgres</span>
-          </div>
-          <div class="card-arch-meta"><span class="arch-badge debt-low">💸 2 项技术债</span><span class="arch-badge standard">📐 Pattern v2.1</span><span class="arch-badge deps">🔗 3 个外部依赖</span></div>
-          <div class="card-metrics">
-            <div class="metric green"><strong>100%</strong> 约束合规</div>
-            <div class="metric"><strong>3</strong> 个 Agent</div>
-            <div class="metric"><strong>87%</strong> 覆盖率</div>
-          </div>
-          <div class="card-progress"><div class="bar" style="width:78%"></div></div>
-          <div class="card-footer"><span>阶段：实现中 · 第 4/7 轮</span><span>⏣ 680k</span></div>
-        </div>
-
-        <!-- payment-gateway -->
-        <div class="project-card" onclick="showProjectDetail('payment-gateway')">
-          <div class="card-header">
-            <div class="card-title"><span class="card-health yellow"></span> payment-gateway</div>
-            <span class="card-tech">Go</span>
-          </div>
-          <div class="service-tags">
-            <span class="service-tag backend"><span class="mini-dot" style="background:var(--green)"></span> gateway-api</span>
-            <span class="service-tag backend"><span class="mini-dot" style="background:var(--yellow)"></span> billing-worker</span>
-            <span class="service-tag data"><span class="mini-dot" style="background:var(--green)"></span> mysql</span>
-            <span class="service-tag data"><span class="mini-dot" style="background:var(--green)"></span> redis</span>
-          </div>
-          <div class="card-arch-meta"><span class="arch-badge debt-warn">💸 5 项技术债</span><span class="arch-badge standard">📐 Pattern v1.8</span><span class="arch-badge deps">🔗 2 个外部依赖</span></div>
-          <div class="card-metrics">
-            <div class="metric yellow"><strong>85%</strong> 约束合规</div>
-            <div class="metric"><strong>2</strong> 个 Agent</div>
-            <div class="metric"><strong>76%</strong> 覆盖率</div>
-          </div>
-          <div class="card-progress"><div class="bar warn" style="width:45%"></div></div>
-          <div class="card-footer"><span>⚠ 1 个约束警告</span><span>⏣ 420k</span></div>
-        </div>
-
-        <!-- user-mobile -->
-        <div class="project-card" onclick="showProjectDetail('user-mobile')">
-          <div class="card-header">
-            <div class="card-title"><span class="card-health green"></span> user-mobile</div>
-            <span class="card-tech">React Native</span>
-          </div>
-          <div class="service-tags">
-            <span class="service-tag mobile"><span class="mini-dot" style="background:var(--green)"></span> iOS-app</span>
-            <span class="service-tag mobile"><span class="mini-dot" style="background:var(--green)"></span> Android-app</span>
-            <span class="service-tag backend"><span class="mini-dot" style="background:var(--green)"></span> user-api</span>
-            <span class="service-tag data"><span class="mini-dot" style="background:var(--green)"></span> postgres</span>
-          </div>
-          <div class="card-arch-meta"><span class="arch-badge debt-low">💸 0 项技术债</span><span class="arch-badge standard">📐 Pattern v2.1</span><span class="arch-badge deps">🔗 1 个外部依赖</span></div>
-          <div class="card-metrics">
-            <div class="metric green"><strong>100%</strong> 约束合规</div>
-            <div class="metric"><strong>2</strong> 个 Agent</div>
-            <div class="metric"><strong>92%</strong> 覆盖率</div>
-          </div>
-          <div class="card-progress"><div class="bar" style="width:60%"></div></div>
-          <div class="card-footer"><span>阶段：实现中 · 第 4/7 轮</span><span>⏣ 510k</span></div>
-        </div>
-
-        <!-- data-pipeline (CRITICAL — has escalation badge) -->
-        <div class="project-card critical" onclick="showProjectDetail('data-pipeline')" style="position:relative">
-          <div class="card-escalation-badge" title="1 个升级待处理">!</div>
-          <div class="card-header">
-            <div class="card-title"><span class="card-health red"></span> data-pipeline</div>
-            <span class="card-tech">Python</span>
-          </div>
-          <div class="service-tags">
-            <span class="service-tag backend"><span class="mini-dot" style="background:var(--green)"></span> etl-worker</span>
-            <span class="service-tag backend"><span class="mini-dot" style="background:var(--red)"></span> stream-processor</span>
-            <span class="service-tag data"><span class="mini-dot" style="background:var(--green)"></span> clickhouse</span>
-            <span class="service-tag data"><span class="mini-dot" style="background:var(--red)"></span> MQ 待定</span>
-          </div>
-          <div class="card-arch-meta"><span class="arch-badge debt-high">💸 8 项技术债</span><span class="arch-badge standard">📐 Pattern v1.5</span><span class="arch-badge deps">🔗 2 个外部依赖</span></div>
-          <div class="card-metrics">
-            <div class="metric red"><strong>60%</strong> 约束合规</div>
-            <div class="metric"><strong>1</strong> Agent 阻塞</div>
-            <div class="metric"><strong>—</strong> 覆盖率</div>
-          </div>
-          <div class="card-progress"><div class="bar warn" style="width:30%"></div></div>
-          <div class="card-footer"><span>🔴 1 个升级 · Agent 阻塞</span><span>⏣ 790k</span></div>
-        </div>
+        <!-- dynamically filled by JS -->
       </div>
     </div>
 
@@ -1547,7 +1458,7 @@ function renderFleetView() {
       '<div class="card-footer"><span>' + p.description + '</span></div>' +
       '</div>';
   });
-  document.querySelector('#view-fleet .fleet-grid').innerHTML = html;
+  document.getElementById('fleet-grid').innerHTML = html;
 }
 
 // ===================================================================
