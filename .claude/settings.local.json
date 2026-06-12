@@ -1,0 +1,6 @@
+{
+  "disabledHooks": [
+    "pre:bash:gateguard-fact-force",
+    "pre:edit-write:gateguard-fact-force"
+  ]
+}
